@@ -143,15 +143,6 @@ const handleChangeNode = async (item: NodeStatus) => {
   }
 };
 
-const toCreateAppPage = () => {
-  router.push({
-    path: "/market",
-    query: {
-      daemonId: currentRemoteNode.value?.uuid
-    }
-  });
-};
-
 const toMarketPage = () => {
   router.push({
     path: "/market",
@@ -339,6 +330,9 @@ const openCreateAppForm = () => {
 onMounted(async () => {
   await initInstancesData();
   setRefreshFn(initInstancesData);
+  if (window.location.href.endsWith("from_install=1")) {
+    showCreateForm.value = true;
+  }
 });
 </script>
 
