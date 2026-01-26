@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { t } from "@/lang/i18n";
-import type { LayoutCard } from "@/types/index";
+import type { LayoutCard } from "@/types";
 import {
   AppstoreOutlined,
   CloseOutlined,
@@ -39,6 +39,7 @@ import { useInstanceMoreDetail } from "../hooks/useInstance";
 import { computeNodeName } from "../tools/nodes";
 import type { NodeStatus } from "../types/index";
 import Shortcut from "./instance/Shortcut.vue";
+import CreateAppForm from "@/widgets/setupApp/CreateAppForm.vue";
 
 defineProps<{
   card: LayoutCard;
@@ -329,6 +330,12 @@ const batchDeleteInstance = async (deleteFile: boolean) => {
   });
 };
 
+const showCreateForm = ref(false);
+
+const openCreateAppForm = () => {
+  showCreateForm.value = true;
+};
+
 onMounted(async () => {
   await initInstancesData();
   setRefreshFn(initInstancesData);
@@ -385,9 +392,9 @@ onMounted(async () => {
             <a-button
               type="primary"
               :disabled="!currentRemoteNode?.available"
-              @click="toCreateAppPage"
+              @click="openCreateAppForm"
             >
-              {{ t("TXT_CODE_53408064") }}
+              {{ t("TXT_CODE_5a74975b") }}
             </a-button>
           </template>
           <template #center>
@@ -542,13 +549,23 @@ onMounted(async () => {
           <Empty :description="t('TXT_CODE_5415f009')" />
         </div>
         <div class="mt-20">
-          <a-button type="primary" @click="toMarketPage">
+          <a-button type="primary" @click="openCreateAppForm">
             {{ t("TXT_CODE_871cb8bc") }}
           </a-button>
         </div>
       </a-col>
     </a-row>
   </div>
+  <!-- 创建实例类型选择表单弹窗 -->
+  <a-modal
+    v-model:open="showCreateForm"
+    :title="t('TXT_CODE_645bc545')"
+    :width="800"
+    :footer="null"
+    :destroy-on-close="true"
+  >
+    <CreateAppForm />
+  </a-modal>
 </template>
 
 <style lang="scss" scoped>
