@@ -360,27 +360,6 @@ onUnmounted(() => {
                   </a-form-item>
 
                   <a-form-item>
-                    <a-typography-title :level="5">{{ t("TXT_CODE_6265ae47") }}</a-typography-title>
-                    <a-typography-paragraph type="secondary">
-                      {{ t("TXT_CODE_24c4768a") }}
-                    </a-typography-paragraph>
-                    <a-input
-                      v-model:value="formData.presetPackAddr"
-                      :placeholder="t('TXT_CODE_4ea93630')"
-                      style="max-width: 320px"
-                    />
-
-                    <a-button class="mx-8" type="primary" @click="toTemplate.edit">
-                      {{ t("TXT_CODE_ad207008") }}
-                      <EditOutlined />
-                    </a-button>
-                    <a-button @click="toTemplate.new">
-                      {{ t("TXT_CODE_53499d7") }}
-                      <PlusOutlined />
-                    </a-button>
-                  </a-form-item>
-
-                  <a-form-item>
                     <a-typography-title :level="5">{{ t("TXT_CODE_514e064a") }}</a-typography-title>
                     <a-typography-paragraph type="secondary">
                       {{ t("TXT_CODE_328191e") }}

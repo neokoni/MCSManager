@@ -94,7 +94,7 @@ const originRouterConfig: RouterConfig[] = [
       mainMenu: true,
       redirect: (user) => {
         if (user?.permission === ROLE.ADMIN) {
-          return "/instances";
+          return "/overview";
         }
         if (user?.permission && user.permission >= ROLE.USER) {
           return "/customer";
@@ -102,6 +102,15 @@ const originRouterConfig: RouterConfig[] = [
         return "/login";
       },
       permission: ROLE.USER
+    }
+  },
+  {
+    path: "/overview",
+    name: t("TXT_CODE_84fbe277"),
+    component: LayoutContainer,
+    meta: {
+      mainMenu: true,
+      permission: ROLE.ADMIN
     }
   },
   {
@@ -166,34 +175,6 @@ const originRouterConfig: RouterConfig[] = [
         ]
       }
     ]
-  },
-  {
-    path: "/market",
-    name: t("TXT_CODE_27594db8"),
-    component: LayoutContainer,
-    meta: {
-      mainMenu: true,
-      permission: ROLE.ADMIN
-    },
-    children: [
-      {
-        path: "editor",
-        name: t("TXT_CODE_54275b9c"),
-        component: LayoutContainer,
-        meta: {
-          permission: ROLE.ADMIN
-        }
-      }
-    ]
-  },
-  {
-    path: "/overview",
-    name: t("TXT_CODE_84fbe277"),
-    component: LayoutContainer,
-    meta: {
-      mainMenu: true,
-      permission: ROLE.ADMIN
-    }
   },
   {
     path: "/users",
