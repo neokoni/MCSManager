@@ -25,7 +25,11 @@ module.exports = {
     moduleIds: "named"
   },
   externalsPresets: { node: true },
-  externals: [nodeExternals()],
+  externals: [
+    nodeExternals({
+      allowlist: ["mcsmanager-common"]
+    })
+  ],
   output: {
     filename: "app.js",
     path: path.resolve(__dirname, "production")
@@ -33,7 +37,8 @@ module.exports = {
   resolve: {
     extensions: [".ts", ".js"],
     alias: {
-      "@languages": path.resolve(__dirname, "../languages")
+      "@languages": path.resolve(__dirname, "../languages"),
+      "mcsmanager-common": path.resolve(__dirname, "../common/src/index.ts")
     }
   }
 };
