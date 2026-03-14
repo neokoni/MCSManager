@@ -5,10 +5,11 @@ import InstanceSubsystem from "../service/system_instance";
 
 import fs from "fs-extra";
 import i18next from "i18next";
-import { systemInfo, toNumber, toText } from "mcsmanager-common";
+import { systemInfo, toBoolean, toNumber, toText } from "mcsmanager-common";
 import { LOCAL_PRESET_LANG_PATH } from "../const";
 import { globalConfiguration } from "../entity/config";
 import { $t } from "../i18n";
+import { DockerManager } from "../service/docker_service";
 import logger from "../service/log";
 import VisualDataSubsystem from "../service/system_visual_data";
 import { getVersion } from "../service/version";
@@ -22,6 +23,15 @@ routerApp.on("info/overview", async (ctx) => {
     total++;
     if (v.status() == Instance.STATUS_RUNNING) running++;
   });
+
+  let dockerPlatforms: string[] | undefined;
+  try {
+    const dockerManager = new DockerManager();
+    dockerPlatforms = await dockerManager.getSupportedPlatforms();
+  } catch (error: any) {
+    logger.debug("Failed to get Docker platforms:", error);
+  }
+
   const info = {
     version: daemonVersion,
     process: {
@@ -43,8 +53,13 @@ routerApp.on("info/overview", async (ctx) => {
       portRangeStart: globalConfiguration.config.allocatablePortRange[0],
       portRangeEnd: globalConfiguration.config.allocatablePortRange[1],
       portAssignInterval: globalConfiguration.config.portAssignInterval,
-      port: globalConfiguration.config.port
-    }
+      port: globalConfiguration.config.port,
+      outputBufferSize: globalConfiguration.config.outputBufferSize,
+      enableSoftShutdown: globalConfiguration.config.enableSoftShutdown,
+      softShutdownSkipDocker: globalConfiguration.config.softShutdownSkipDocker,
+      softShutdownWaitSeconds: globalConfiguration.config.softShutdownWaitSeconds
+    },
+    dockerPlatforms
   };
   protocol.response(ctx, info);
 });
@@ -58,6 +73,10 @@ routerApp.on("info/setting", async (ctx, data) => {
   const portRangeEnd = toNumber(data.portRangeEnd);
   const portAssignInterval = toNumber(data.portAssignInterval);
   const port = toNumber(data.port);
+  const outputBufferSize = toNumber(data.outputBufferSize);
+  const enableSoftShutdown = toBoolean(data.enableSoftShutdown);
+  const softShutdownSkipDocker = toBoolean(data.softShutdownSkipDocker);
+  const softShutdownWaitSeconds = toNumber(data.softShutdownWaitSeconds);
   if (language) {
     logger.warn($t("TXT_CODE_66e32091"), language);
     i18next.changeLanguage(language);
@@ -82,6 +101,18 @@ routerApp.on("info/setting", async (ctx, data) => {
   }
   if (port && port > 0 && port < 65535) {
     globalConfiguration.config.port = port;
+  }
+  if (outputBufferSize != null && outputBufferSize >= 16 && outputBufferSize <= 4096) {
+    globalConfiguration.config.outputBufferSize = outputBufferSize;
+  }
+  if (enableSoftShutdown != null) {
+    globalConfiguration.config.enableSoftShutdown = enableSoftShutdown;
+  }
+  if (softShutdownSkipDocker != null) {
+    globalConfiguration.config.softShutdownSkipDocker = softShutdownSkipDocker;
+  }
+  if (softShutdownWaitSeconds != null && softShutdownWaitSeconds >= 1 && softShutdownWaitSeconds <= 600) {
+    globalConfiguration.config.softShutdownWaitSeconds = softShutdownWaitSeconds;
   }
   globalConfiguration.store();
   protocol.response(ctx, true);

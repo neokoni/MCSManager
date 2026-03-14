@@ -61,11 +61,10 @@ declare global {
   }
 
   interface IJavaInfo {
-    name: string;
-    version: string;
+    fullname: string;
+    path?: string;
     installTime: number;
     downloading: boolean;
-    fullname: string;
   }
 
   interface IJavaRuntime {
@@ -75,6 +74,8 @@ declare global {
   }
 
   interface IGlobalInstanceDockerConfig {
+    /** Docker image for update command; empty = not used */
+    updateCommandImage?: string;
     containerName?: string;
     image?: string;
     memory?: number;
@@ -93,6 +94,10 @@ declare global {
     memorySwap?: number;
     memorySwappiness?: number;
     labels?: string[];
+    capAdd?: string[];
+    capDrop?: string[];
+    devices?: string[];
+    privileged?: boolean;
   }
 
   interface IPanelResponseProtocol {
@@ -160,7 +165,12 @@ declare global {
       portRangeEnd: number;
       portAssignInterval: number;
       port: number;
+      outputBufferSize: number;
+      enableSoftShutdown: boolean;
+      softShutdownSkipDocker: boolean;
+      softShutdownWaitSeconds: number;
     };
+    dockerPlatforms?: string[];
   }
 
   interface IPanelOverviewResponse {
@@ -218,6 +228,8 @@ declare global {
       pageTitle: string;
       logoImage: string;
       backgroundImage: string;
+      /** Main app navigation: "left" = sidebar, "right" = top header only */
+      sidebarPosition?: "left" | "right";
     };
   }
 
@@ -255,6 +267,10 @@ declare global {
     remark: string;
     targetLink?: string;
     author: string;
+    dockerOptional?: {
+      image: string;
+      updateCommandImage?: string;
+    };
     setupInfo: IGlobalInstanceConfig;
     gameType: string;
     image: string;

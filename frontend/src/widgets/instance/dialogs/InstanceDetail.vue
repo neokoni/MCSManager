@@ -1,17 +1,18 @@
 <script setup lang="ts">
 import {
+  useDockerCapabilityEditDialog,
+  useDockerDeviceEditDialog,
   useDockerEnvEditDialog,
   useDockerLabelEditDialog,
   usePortEditDialog,
   useUploadFileDialog,
   useVolumeEditDialog
 } from "@/components/fc";
-import { useAppRouters } from "@/hooks/useAppRouters";
 import { INSTANCE_TYPE_TRANSLATION } from "@/hooks/useInstance";
 import { SEARCH_ALL_KEY, useMarketPackages, type FilterOption } from "@/hooks/useMarketPackages";
 import { useScreen } from "@/hooks/useScreen";
 import { isCN, t } from "@/lang/i18n";
-import { getNetworkModeList, imageList } from "@/services/apis/envImage";
+import { getNetworkModeList } from "@/services/apis/envImage";
 import { updateAnyInstanceConfig } from "@/services/apis/instance";
 import { dockerPortsArray } from "@/tools/common";
 import { reportErrorMsg } from "@/tools/validator";
@@ -21,12 +22,12 @@ import { CheckOutlined, CloseOutlined } from "@ant-design/icons-vue";
 import type { FormInstance } from "ant-design-vue";
 import { message } from "ant-design-vue";
 import type { Rule } from "ant-design-vue/es/form";
-import type { DefaultOptionType } from "ant-design-vue/es/select";
 import { Dayjs } from "dayjs";
 import _ from "lodash";
 import { computed, defineComponent, ref, unref } from "vue";
 import { GLOBAL_INSTANCE_NAME } from "../../../config/const";
 import { dayjsToTimestamp, timestampToDayjs } from "../../../tools/time";
+import DockerImageSelect from "./components/DockerImageSelect.vue";
 
 interface FormDetail extends InstanceDetail {
   dayjsEndTime?: Dayjs;
@@ -66,10 +67,6 @@ enum TabSettings {
 }
 const activeKey = ref<TabSettings>(TabSettings.Basic);
 
-const IMAGE_DEFINE = {
-  NEW: "__MCSM_NEW_IMAGE__",
-  EDIT: "__MCSM_EDIT_IMAGE__"
-};
 const UPDATE_CMD_DESCRIPTION = t("TXT_CODE_fa487a47");
 const UPDATE_CMD_TEMPLATE =
   t("TXT_CODE_61ca492b") +
@@ -85,10 +82,9 @@ const title = computed(() =>
       : t("TXT_CODE_3d45d8d")
     : t("TXT_CODE_aac98b2a")
 );
-const { toPage } = useAppRouters();
 const { isPhone } = useScreen();
 
-// form - 合并后的统一表单
+// Unified form (merged instance + template)
 const formRef = ref<FormInstance>();
 const formData = ref<CombinedFormData>({
   instance: {},
@@ -224,62 +220,14 @@ const addOption = (item: string, category: keyof typeof selectOptions.value) => 
 };
 
 const networkModes = ref<DockerNetworkModes[]>([]);
-const dockerImages = ref<{ label: string; value: string }[]>([]);
 const { execute: executeGetNetworkModeList } = getNetworkModeList();
 const { execute, isLoading } = updateAnyInstanceConfig();
-const { execute: getImageList } = imageList();
 
 const isGlobalTerminal = computed(() => {
   return props.instanceInfo?.config.nickname === GLOBAL_INSTANCE_NAME;
 });
 
 const isDockerMode = computed(() => formData?.value?.instance?.config?.processType === "docker");
-
-const loadImages = async () => {
-  dockerImages.value = [
-    {
-      label: t("TXT_CODE_435f4975"),
-      value: IMAGE_DEFINE.EDIT
-    }
-  ];
-
-  try {
-    const images = await getImageList({
-      params: {
-        daemonId: props.daemonId ?? ""
-      },
-      method: "GET"
-    });
-
-    if (images.value) {
-      for (const iterator of images.value) {
-        const repoTags = iterator?.RepoTags?.[0];
-        if (repoTags)
-          dockerImages.value.push({
-            label: repoTags,
-            value: repoTags
-          });
-      }
-    }
-  } catch (err: any) {
-    // ignore
-  }
-};
-
-const selectImage = (row: DefaultOptionType) => {
-  const image = row.value;
-  if (typeof image === "string" && image === IMAGE_DEFINE.NEW) {
-    toPage({
-      path: `/node/image?daemonId=${props.daemonId}`
-    });
-    return;
-  }
-  if (image === IMAGE_DEFINE.EDIT && formData.value?.instance?.config) {
-    formData.value.instance.config.docker.image = "";
-    formData.value.instance.imageSelectMethod = "EDIT";
-    return;
-  }
-};
 
 const loadNetworkModes = async () => {
   try {
@@ -314,7 +262,7 @@ const openDialog = async ({ item, i }: { item?: QuickStartPackages; i?: number }
     formType.value = "template";
     activeKey.value = TabSettings.Template;
   } else {
-    await Promise.all([loadImages(), loadNetworkModes()]);
+    await Promise.all([loadNetworkModes()]);
   }
   initFormDetail();
   open.value = true;
@@ -363,7 +311,9 @@ const encodeFormData = () => {
   throw new Error("Ref Options is null");
 };
 
-const handleEditDockerConfig = async (type: "port" | "volume" | "env" | "label") => {
+const handleEditDockerConfig = async (
+  type: "port" | "volume" | "env" | "label" | "device" | "capability"
+) => {
   if (type === "port" && formData.value?.instance?.config) {
     // "25565:25565/tcp 8080:8080/tcp" -> Array
     const portArray = dockerPortsArray(formData.value?.instance?.config.docker.ports || []);
@@ -409,6 +359,49 @@ const handleEditDockerConfig = async (type: "port" | "volume" | "env" | "label")
     const result = await useDockerLabelEditDialog(labels);
     const labelsArray = result.map((v) => `${v.label}=${v.value}`);
     formData.value.instance.config.docker.labels = labelsArray;
+  }
+
+  if (type === "capability" && formData.value?.instance?.config) {
+    const capAdd = formData.value.instance.config.docker.capAdd || [];
+    const capDrop = formData.value.instance.config.docker.capDrop || [];
+
+    const allLabels = [...new Set([...capAdd, ...capDrop])]; // Deduplication solve
+    const dialogParams = allLabels.map((label) => ({
+      label: label,
+      value: capAdd.includes(label) ? "add" : "drop"
+    }));
+
+    const result = await useDockerCapabilityEditDialog(dialogParams);
+
+    formData.value.instance.config.docker.capAdd = result
+      .filter((item) => item.value === "add")
+      .map((item) => item.label);
+    formData.value.instance.config.docker.capDrop = result
+      .filter((item) => item.value === "drop")
+      .map((item) => item.label);
+  }
+
+  if (type === "device" && formData.value?.instance?.config) {
+    const devices = (formData.value.instance.config.docker.devices || []).map((v) => {
+      const tmp = v.split("|");
+      return {
+        PathOnHost: tmp[0] || "",
+        PathInContainer: tmp[1] || "",
+        CgroupPermissions: tmp[2] || ""
+      };
+    });
+    const result = await useDockerDeviceEditDialog(devices);
+    const devicesArray = result
+      .map((v) => {
+        if (!v.PathOnHost) return "";
+        return !v.PathInContainer && !v.CgroupPermissions
+          ? v.PathOnHost
+          : !v.CgroupPermissions
+          ? `${v.PathOnHost}|${v.PathInContainer}`
+          : `${v.PathOnHost}|${v.PathInContainer}|${v.CgroupPermissions}`;
+      })
+      .filter(Boolean);
+    formData.value.instance.config.docker.devices = devicesArray;
   }
 };
 
@@ -852,6 +845,7 @@ defineExpose({
               </a-col>
               <a-col :xs="24" :offset="0">
                 <a-form-item>
+                  <!-- Update Command -->
                   <a-typography-title :level="5">{{ t("TXT_CODE_bb0b9711") }}</a-typography-title>
                   <a-typography-paragraph>
                     <a-tooltip :title="UPDATE_CMD_DESCRIPTION" placement="top">
@@ -871,6 +865,31 @@ defineExpose({
                   />
                 </a-form-item>
               </a-col>
+              <a-col :xs="24" :lg="12" :offset="0">
+                <a-form-item>
+                  <a-typography-title :level="5">
+                    {{ t("TXT_CODE_a3bcd4b5") }}
+                  </a-typography-title>
+                  <a-typography-paragraph>
+                    <a-tooltip :title="t('TXT_CODE_3bbdf523')" placement="top">
+                      <a-typography-text type="secondary" :class="['typography-text-ellipsis']">
+                        {{ t("TXT_CODE_3bbdf523") }}
+                      </a-typography-text>
+                    </a-tooltip>
+                  </a-typography-paragraph>
+                  <DockerImageSelect
+                    :is-allow-empty="true"
+                    :is-allow-text="t('TXT_CODE_8aca7994')"
+                    :model-value="formData.instance.config?.docker?.updateCommandImage ?? ''"
+                    :image-select-method="formData.instance.imageSelectMethod ?? 'SELECT'"
+                    :daemon-id="daemonId ?? ''"
+                    @update:model-value="
+                      (v) => (formData.instance.config!.docker!.updateCommandImage = v)
+                    "
+                    @update:image-select-method="(v) => (formData.instance.imageSelectMethod = v)"
+                  />
+                </a-form-item>
+              </a-col>
               <a-col :xs="24" :lg="6" :offset="0">
                 <a-form-item>
                   <a-typography-title :level="5" class="require-field">
@@ -878,10 +897,7 @@ defineExpose({
                   </a-typography-title>
                   <a-typography-paragraph>
                     <a-tooltip :title="t('TXT_CODE_6e69b5a5')" placement="top">
-                      <a-typography-text
-                        type="secondary"
-                        :class="[!isPhone && 'two-line-height', 'typography-text-ellipsis']"
-                      >
+                      <a-typography-text type="secondary" :class="['typography-text-ellipsis']">
                         {{ t("TXT_CODE_6e69b5a5") }}
                       </a-typography-text>
                     </a-tooltip>
@@ -895,7 +911,7 @@ defineExpose({
                   </a-select>
                 </a-form-item>
               </a-col>
-              <a-col :xs="24" :lg="16" :offset="0">
+              <a-col :xs="24" :lg="6" :offset="0">
                 <a-form-item>
                   <a-typography-title :level="5">{{ t("TXT_CODE_fffaeb17") }}</a-typography-title>
                   <a-typography-paragraph>
@@ -915,7 +931,6 @@ defineExpose({
                     v-model:value="formData.instance.config.runAs"
                     :placeholder="t('TXT_CODE_9aa83c05')"
                     :disabled="isGlobalTerminal"
-                    style="width: 400px"
                   />
                 </a-form-item>
               </a-col>
@@ -956,68 +971,42 @@ defineExpose({
                 </a-form-item>
               </a-col>
               <template v-if="isDockerMode">
-                <a-col
-                  v-if="formData.instance.imageSelectMethod === 'SELECT'"
-                  :xs="24"
-                  :lg="16"
-                  :offset="0"
-                >
+                <a-col :xs="24" :lg="16" :offset="0">
                   <a-form-item :name="['instance', 'config', 'docker', 'image']">
                     <a-typography-title :level="5" :class="{ 'require-field': isDockerMode }">
-                      {{ t("TXT_CODE_6904cb3") }}
+                      {{
+                        formData.instance.imageSelectMethod === "SELECT"
+                          ? t("TXT_CODE_6904cb3")
+                          : t("TXT_CODE_4e4d9680")
+                      }}
                     </a-typography-title>
                     <a-typography-paragraph>
-                      <a-tooltip :title="t('TXT_CODE_ec734b5c')" placement="top">
-                        <a-typography-text
-                          type="secondary"
-                          :class="[!isPhone && 'two-line-height', 'typography-text-ellipsis']"
-                        >
-                          {{ t("TXT_CODE_ec734b5c") }}
-                        </a-typography-text>
-                      </a-tooltip>
-                    </a-typography-paragraph>
-                    <a-select
-                      v-model:value="formData.instance.config.docker.image"
-                      size="large"
-                      style="width: 100%"
-                      :placeholder="t('TXT_CODE_3bb646e4')"
-                      @focus="loadImages"
-                      @change="(e, option: DefaultOptionType) => selectImage(option)"
-                    >
-                      <a-select-option
-                        v-for="item in dockerImages"
-                        :key="item.value"
-                        :value="item.value"
+                      <a-tooltip
+                        :title="
+                          formData.instance.imageSelectMethod === 'SELECT'
+                            ? t('TXT_CODE_ec734b5c')
+                            : t('TXT_CODE_4a570d32')
+                        "
+                        placement="top"
                       >
-                        {{ item.label }}
-                      </a-select-option>
-                    </a-select>
-                  </a-form-item>
-                </a-col>
-
-                <a-col
-                  v-if="formData.instance.imageSelectMethod === 'EDIT'"
-                  :xs="24"
-                  :lg="16"
-                  :offset="0"
-                >
-                  <a-form-item :name="['instance', 'config', 'docker', 'image']">
-                    <a-typography-title :level="5" :class="{ 'require-field': isDockerMode }">
-                      {{ t("TXT_CODE_4e4d9680") }}
-                    </a-typography-title>
-                    <a-typography-paragraph>
-                      <a-tooltip :title="t('TXT_CODE_4a570d32')" placement="top">
                         <a-typography-text
                           type="secondary"
                           :class="[!isPhone && 'two-line-height', 'typography-text-ellipsis']"
                         >
-                          {{ t("TXT_CODE_4a570d32") }}
+                          {{
+                            formData.instance.imageSelectMethod === "SELECT"
+                              ? t("TXT_CODE_ec734b5c")
+                              : t("TXT_CODE_4a570d32")
+                          }}
                         </a-typography-text>
                       </a-tooltip>
                     </a-typography-paragraph>
-                    <a-input
-                      v-model:value="formData.instance.config.docker.image"
-                      :placeholder="t('TXT_CODE_d7638d7b')"
+                    <DockerImageSelect
+                      :model-value="formData.instance.config?.docker?.image ?? ''"
+                      :image-select-method="formData.instance.imageSelectMethod ?? 'SELECT'"
+                      :daemon-id="daemonId ?? ''"
+                      @update:model-value="(v) => (formData.instance.config!.docker!.image = v)"
+                      @update:image-select-method="(v) => (formData.instance.imageSelectMethod = v)"
                     />
                   </a-form-item>
                 </a-col>
@@ -1228,6 +1217,71 @@ defineExpose({
                     </a-tooltip>
                   </a-form-item>
                 </a-col>
+
+                <a-col :xs="24" :lg="8" :offset="0">
+                  <a-form-item name="privilegedMode">
+                    <a-typography-title :level="5">
+                      {{ t("TXT_CODE_dc47d2aa") }}
+                    </a-typography-title>
+                    <a-typography-paragraph>
+                      <a-tooltip :title="t('TXT_CODE_18437e81')" placement="top">
+                        <a-typography-text
+                          type="secondary"
+                          :class="[!isPhone && 'two-line-height', 'typography-text-ellipsis']"
+                        >
+                          {{ t("TXT_CODE_18437e81") }}
+                        </a-typography-text>
+                      </a-tooltip>
+                    </a-typography-paragraph>
+                    <div class="ml-4">
+                      <a-switch
+                        v-model:checked="formData.instance.config.docker.privileged"
+                        :disabled="isGlobalTerminal"
+                        :checked-value="true"
+                        :un-checked-value="false"
+                      >
+                        <template #checkedChildren><check-outlined /></template>
+                        <template #unCheckedChildren><close-outlined /></template>
+                      </a-switch>
+                    </div>
+                  </a-form-item>
+                </a-col>
+
+                <a-col :xs="24" :lg="8" :offset="0">
+                  <a-form-item>
+                    <a-typography-title :level="5">{{ t("TXT_CODE_bbbd4133") }}</a-typography-title>
+                    <a-typography-paragraph>
+                      <a-tooltip :title="t('TXT_CODE_377319df')" placement="top">
+                        <a-typography-text type="secondary" class="typography-text-ellipsis">
+                          {{ t("TXT_CODE_377319df") }}
+                        </a-typography-text>
+                      </a-tooltip>
+                    </a-typography-paragraph>
+                    <a-input-group compact>
+                      <a-button type="default" @click="() => handleEditDockerConfig('capability')">
+                        {{ t("TXT_CODE_ad207008") }}
+                      </a-button>
+                    </a-input-group>
+                  </a-form-item>
+                </a-col>
+
+                <a-col :xs="24" :lg="8" :offset="0">
+                  <a-form-item>
+                    <a-typography-title :level="5">{{ t("TXT_CODE_b3a60c78") }}</a-typography-title>
+                    <a-typography-paragraph>
+                      <a-tooltip :title="t('TXT_CODE_b6e18b87')" placement="top">
+                        <a-typography-text type="secondary" class="typography-text-ellipsis">
+                          {{ t("TXT_CODE_b6e18b87") }}
+                        </a-typography-text>
+                      </a-tooltip>
+                    </a-typography-paragraph>
+                    <a-input-group compact>
+                      <a-button type="default" @click="() => handleEditDockerConfig('device')">
+                        {{ t("TXT_CODE_ad207008") }}
+                      </a-button>
+                    </a-input-group>
+                  </a-form-item>
+                </a-col>
               </template>
             </a-row>
           </a-tab-pane>
@@ -1255,6 +1309,7 @@ defineExpose({
                       v-model:value="formData.instance.config.docker.cpuUsage"
                       :allow-clear="true"
                       :placeholder="t('TXT_CODE_91d857f5')"
+                      suffix="%"
                     />
                   </a-tooltip>
                 </a-form-item>
@@ -1295,6 +1350,7 @@ defineExpose({
                     v-model:value="formData.instance.config.docker.memory"
                     :allow-clear="true"
                     :placeholder="t('TXT_CODE_80790069')"
+                    suffix="MB"
                   />
                 </a-form-item>
               </a-col>
@@ -1313,6 +1369,39 @@ defineExpose({
                     v-model:value="formData.instance.config.docker.memorySwap"
                     :allow-clear="true"
                     :placeholder="t('TXT_CODE_6f1129fb')"
+                  />
+                </a-form-item>
+              </a-col>
+
+              <a-col :xs="24" :lg="8" :offset="0">
+                <a-form-item>
+                  <a-typography-title :level="5">
+                    {{ t("TXT_CODE_ca61b504") }}
+                    <a-tag color="blue">{{ t("TXT_CODE_33d7a685") }}</a-tag>
+                  </a-typography-title>
+                  <a-typography-paragraph>
+                    <a-tooltip
+                      :title="
+                        t(
+                          'TXT_CODE_d86fbff5'
+                        )
+                      "
+                      placement="top"
+                    >
+                      <a-typography-text type="secondary" class="typography-text-ellipsis">
+                        {{
+                          t(
+                            "TXT_CODE_d86fbff5"
+                          )
+                        }}
+                      </a-typography-text>
+                    </a-tooltip>
+                  </a-typography-paragraph>
+                  <a-input
+                    v-model:value="formData.instance.config.docker.maxSpace"
+                    :allow-clear="true"
+                    :placeholder="t('TXT_CODE_285cef0c')"
+                    suffix="GB"
                   />
                 </a-form-item>
               </a-col>

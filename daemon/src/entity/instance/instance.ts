@@ -105,7 +105,7 @@ export default class Instance extends EventEmitter {
   public process?: IInstanceProcess;
 
   private outputLoopTask?: NodeJS.Timeout;
-  private outputBuffer = new CircularBuffer<string>(64);
+  private outputBuffer: CircularBuffer<string>;
 
   // When initializing an instance, the instance must be initialized through uuid and configuration class, otherwise the instance will be unavailable
   constructor(instanceUuid: string, config: InstanceConfig) {
@@ -121,6 +121,10 @@ export default class Instance extends EventEmitter {
     this.lock = false;
 
     this.config = config;
+
+    this.outputBuffer = new CircularBuffer<string>(
+      globalConfiguration.config.outputBufferSize || 256
+    );
 
     this.process = undefined;
     this.startCount = 0;
@@ -213,6 +217,7 @@ export default class Instance extends EventEmitter {
     configureEntityParams(this.config, cfg, "basePort", Number);
 
     if (cfg.docker) {
+      configureEntityParams(this.config.docker, cfg.docker, "updateCommandImage", String);
       configureEntityParams(this.config.docker, cfg.docker, "containerName", String);
       configureEntityParams(this.config.docker, cfg.docker, "image", String);
       configureEntityParams(this.config.docker, cfg.docker, "memory", Number);
@@ -231,6 +236,10 @@ export default class Instance extends EventEmitter {
       configureEntityParams(this.config.docker, cfg.docker, "changeWorkdir", Boolean);
       configureEntityParams(this.config.docker, cfg.docker, "memorySwappiness", Number);
       configureEntityParams(this.config.docker, cfg.docker, "memorySwap", Number);
+      configureEntityParams(this.config.docker, cfg.docker, "capAdd");
+      configureEntityParams(this.config.docker, cfg.docker, "capDrop");
+      configureEntityParams(this.config.docker, cfg.docker, "devices");
+      configureEntityParams(this.config.docker, cfg.docker, "privileged", Boolean);
     }
     if (cfg.pingConfig) {
       configureEntityParams(this.config.pingConfig, cfg.pingConfig, "ip", String);
@@ -568,6 +577,9 @@ export default class Instance extends EventEmitter {
   }
 
   private startOutputLoop() {
+    this.outputBuffer = new CircularBuffer<string>(
+      globalConfiguration.config.outputBufferSize || 256
+    );
     this.outputLoopTask = setInterval(() => {
       this.flushOutputBuffer();
     }, 50);
