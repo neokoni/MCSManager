@@ -46,7 +46,7 @@ const openPhoneMenu = (b = false) => {
   <header class="app-header-wrapper" :style="headerStyle">
     <div v-if="!isPhone" class="app-header-content">
       <nav class="btns">
-        <a href="." style="margin-right: 12px">
+        <a href="#" style="margin-right: 12px">
           <div class="logo">
             <img :src="logoImage" style="height: 18px" />
           </div>

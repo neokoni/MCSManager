@@ -64,7 +64,7 @@ const onAppDropdownClick = (item: SidebarAppDropdownEntry, info: { key: Key }) =
 
 <template>
   <aside class="left-sidebar">
-    <a href="." class="logo">
+    <a href="#" class="logo">
       <img :src="logoImage" />
     </a>
     <nav class="sidebar-menu">
@@ -73,12 +73,9 @@ const onAppDropdownClick = (item: SidebarAppDropdownEntry, info: { key: Key }) =
         <div v-if="entry.type === 'divider'" class="sidebar-divider" />
 
         <!-- Route link -->
-        <a
-          v-else-if="entry.type === 'route'"
-          class="sidebar-item"
+        <a v-else-if="entry.type === 'route'" class="sidebar-item"
           :class="[entry.customClass, { 'sidebar-item-active': isRouteActive(entry.path) }]"
-          @click.prevent="handleToPage(entry.path)"
-        >
+          @click.prevent="handleToPage(entry.path)">
           <component :is="getRouteIcon(entry.path)" class="sidebar-item-icon" />
           <span class="sidebar-item-text">{{ entry.name }}</span>
         </a>
@@ -99,12 +96,8 @@ const onAppDropdownClick = (item: SidebarAppDropdownEntry, info: { key: Key }) =
         </a-dropdown>
 
         <!-- App menu (single click) -->
-        <a
-          v-else-if="entry.type === 'app'"
-          class="sidebar-item"
-          :class="entry.customClass"
-          @click.prevent="entry.click()"
-        >
+        <a v-else-if="entry.type === 'app'" class="sidebar-item" :class="entry.customClass"
+          @click.prevent="entry.click()">
           <component :is="entry.icon" v-if="entry.icon" class="sidebar-item-icon" />
           <span class="sidebar-item-text">{{ entry.title }}</span>
         </a>
@@ -119,6 +112,7 @@ const onAppDropdownClick = (item: SidebarAppDropdownEntry, info: { key: Key }) =
   text-align: center;
   padding-top: 10px;
   padding-bottom: 18px;
+
   img {
     height: 20px;
     animation: MasterLogoWobble 10s ease infinite;
@@ -212,12 +206,15 @@ const onAppDropdownClick = (item: SidebarAppDropdownEntry, info: { key: Key }) =
   62% {
     transform: rotate(0deg);
   }
+
   75% {
     transform: rotate(4deg);
   }
+
   88% {
     transform: rotate(-4deg);
   }
+
   100% {
     transform: rotate(0deg);
   }
