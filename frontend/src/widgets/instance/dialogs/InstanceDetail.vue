@@ -32,6 +32,8 @@ import DockerImageSelect from "./components/DockerImageSelect.vue";
 interface FormDetail extends InstanceDetail {
   dayjsEndTime?: Dayjs;
   networkAliasesText: string;
+  deviceReadBpsText: string;
+  deviceWriteBpsText: string;
   imageSelectMethod: "SELECT" | "EDIT";
 }
 
@@ -169,6 +171,8 @@ const initFormDetail = () => {
       ...props.instanceInfo,
       dayjsEndTime: timestampToDayjs(props.instanceInfo?.config?.endTime),
       networkAliasesText: props.instanceInfo?.config?.docker.networkAliases?.join(",") || "",
+      deviceReadBpsText: props.instanceInfo?.config?.docker.deviceReadBps?.join(",") || "",
+      deviceWriteBpsText: props.instanceInfo?.config?.docker.deviceWriteBps?.join(",") || "",
       imageSelectMethod: "SELECT"
     };
   } else {
@@ -181,9 +185,14 @@ const initFormDetail = () => {
       dayjsEndTime: timestampToDayjs(formData.value.template!.setupInfo!.endTime),
       networkAliasesText:
         formData.value.template!.setupInfo!.docker.networkAliases?.join(",") || "",
+      deviceReadBpsText: formData.value.template!.setupInfo!.docker.deviceReadBps?.join(",") || "",
+      deviceWriteBpsText:
+        formData.value.template!.setupInfo!.docker.deviceWriteBps?.join(",") || "",
       imageSelectMethod: "SELECT"
     };
   }
+  initGpuAllocMode();
+  initGpuDeviceIdsText();
 };
 
 const VNodes = defineComponent({
@@ -228,6 +237,43 @@ const isGlobalTerminal = computed(() => {
 });
 
 const isDockerMode = computed(() => formData?.value?.instance?.config?.processType === "docker");
+
+// GPU allocation mode: "all" | "count" | "deviceIds"
+const gpuAllocMode = ref<"all" | "count" | "deviceIds">("all");
+
+const initGpuAllocMode = () => {
+  const docker = formData.value.instance?.config?.docker;
+  if (!docker) return;
+  if (docker.gpuDeviceIds && docker.gpuDeviceIds.length > 0) {
+    gpuAllocMode.value = "deviceIds";
+  } else if (typeof docker.gpuCount === "number" && docker.gpuCount >= 1) {
+    gpuAllocMode.value = "count";
+  } else {
+    gpuAllocMode.value = "all";
+  }
+};
+
+const gpuDeviceIdsText = ref("");
+const initGpuDeviceIdsText = () => {
+  const docker = formData.value.instance?.config?.docker;
+  gpuDeviceIdsText.value = docker?.gpuDeviceIds?.join(",") || "";
+};
+
+const onGpuAllocModeChange = () => {
+  const docker = formData.value.instance?.config?.docker;
+  if (!docker) return;
+  if (gpuAllocMode.value === "all") {
+    docker.gpuCount = -1;
+    docker.gpuDeviceIds = [];
+    gpuDeviceIdsText.value = "";
+  } else if (gpuAllocMode.value === "count") {
+    docker.gpuCount = 1;
+    docker.gpuDeviceIds = [];
+    gpuDeviceIdsText.value = "";
+  } else if (gpuAllocMode.value === "deviceIds") {
+    docker.gpuCount = 0;
+  }
+};
 
 const loadNetworkModes = async () => {
   try {
@@ -306,6 +352,38 @@ const encodeFormData = () => {
       ?.split(",")
       ?.map((v) => v.trim())
       ?.filter((v) => v !== "");
+
+    postData.config.docker.deviceReadBps = postData?.deviceReadBpsText
+      ?.split(",")
+      ?.map((v) => v.trim())
+      ?.filter((v) => v !== "");
+
+    postData.config.docker.deviceWriteBps = postData?.deviceWriteBpsText
+      ?.split(",")
+      ?.map((v) => v.trim())
+      ?.filter((v) => v !== "");
+
+    // Encode GPU device IDs from comma-separated text
+    if (gpuAllocMode.value === "deviceIds") {
+      postData.config.docker.gpuDeviceIds = gpuDeviceIdsText.value
+        .split(",")
+        .map((v) => v.trim())
+        .filter((v) => v !== "");
+      postData.config.docker.gpuCount = 0;
+    } else if (gpuAllocMode.value === "all") {
+      postData.config.docker.gpuCount = -1;
+      postData.config.docker.gpuDeviceIds = [];
+    } else {
+      // count mode: gpuCount is already set via input
+      postData.config.docker.gpuDeviceIds = [];
+    }
+
+    // If GPU is disabled, clear all GPU sub-fields
+    if (!postData.config.docker.gpuEnabled) {
+      postData.config.docker.gpuCount = -1;
+      postData.config.docker.gpuDeviceIds = [];
+    }
+
     return postData;
   }
   throw new Error("Ref Options is null");
@@ -1380,20 +1458,9 @@ defineExpose({
                     <a-tag color="blue">{{ t("TXT_CODE_33d7a685") }}</a-tag>
                   </a-typography-title>
                   <a-typography-paragraph>
-                    <a-tooltip
-                      :title="
-                        t(
-                          'TXT_CODE_d86fbff5'
-                        )
-                      "
-                      placement="top"
-                    >
+                    <a-tooltip :title="t('TXT_CODE_d86fbff5')" placement="top">
                       <a-typography-text type="secondary" class="typography-text-ellipsis">
-                        {{
-                          t(
-                            "TXT_CODE_d86fbff5"
-                          )
-                        }}
+                        {{ t("TXT_CODE_d86fbff5") }}
                       </a-typography-text>
                     </a-tooltip>
                   </a-typography-paragraph>
@@ -1423,6 +1490,213 @@ defineExpose({
                   />
                 </a-form-item>
               </a-col>
+              <a-col :xs="24" :lg="8" :offset="0">
+                <a-form-item>
+                  <a-typography-title :level="5">{{
+                    t("TXT_CODE_network_upload_limit")
+                  }}</a-typography-title>
+                  <a-typography-paragraph>
+                    <a-tooltip :title="t('TXT_CODE_network_upload_limit_help')" placement="top">
+                      <a-typography-text type="secondary" class="typography-text-ellipsis">
+                        {{ t("TXT_CODE_network_upload_limit_help") }}
+                      </a-typography-text>
+                    </a-tooltip>
+                  </a-typography-paragraph>
+                  <a-input
+                    v-model:value="formData.instance.config.docker.uploadSpeedLimit"
+                    :allow-clear="true"
+                    :placeholder="t('TXT_CODE_network_upload_limit_placeholder')"
+                    suffix="KB/s"
+                  />
+                </a-form-item>
+              </a-col>
+              <a-col :xs="24" :lg="8" :offset="0">
+                <a-form-item>
+                  <a-typography-title :level="5">{{
+                    t("TXT_CODE_network_download_limit")
+                  }}</a-typography-title>
+                  <a-typography-paragraph>
+                    <a-tooltip :title="t('TXT_CODE_network_download_limit_help')" placement="top">
+                      <a-typography-text type="secondary" class="typography-text-ellipsis">
+                        {{ t("TXT_CODE_network_download_limit_help") }}
+                      </a-typography-text>
+                    </a-tooltip>
+                  </a-typography-paragraph>
+                  <a-input
+                    v-model:value="formData.instance.config.docker.downloadSpeedLimit"
+                    :allow-clear="true"
+                    :placeholder="t('TXT_CODE_network_download_limit_placeholder')"
+                    suffix="KB/s"
+                  />
+                </a-form-item>
+              </a-col>
+
+              <a-col :xs="24" :lg="8" :offset="0">
+                <a-form-item>
+                  <a-typography-title :level="5">{{
+                    t("TXT_CODE_59653f38")
+                  }}</a-typography-title>
+                  <a-typography-paragraph>
+                    <a-tooltip
+                      :title="
+                        t(
+                          'TXT_CODE_edbb92dc'
+                        )
+                      "
+                      placement="top"
+                    >
+                      <a-typography-text type="secondary" class="typography-text-ellipsis">
+                        {{
+                          t(
+                            "TXT_CODE_edbb92dc"
+                          )
+                        }}
+                      </a-typography-text>
+                    </a-tooltip>
+                  </a-typography-paragraph>
+                  <a-input
+                    v-model:value="formData.instance.deviceReadBpsText"
+                    :allow-clear="true"
+                    :placeholder="t('TXT_CODE_6542489a')"
+                  />
+                </a-form-item>
+              </a-col>
+
+              <a-col :xs="24" :lg="8" :offset="0">
+                <a-form-item>
+                  <a-typography-title :level="5">{{
+                    t("TXT_CODE_9d2e6d5e")
+                  }}</a-typography-title>
+                  <a-typography-paragraph>
+                    <a-tooltip
+                      :title="
+                        t(
+                          'TXT_CODE_2b2ff3ff'
+                        )
+                      "
+                      placement="top"
+                    >
+                      <a-typography-text type="secondary" class="typography-text-ellipsis">
+                        {{
+                          t(
+                            "TXT_CODE_2b2ff3ff"
+                          )
+                        }}
+                      </a-typography-text>
+                    </a-tooltip>
+                  </a-typography-paragraph>
+                  <a-input
+                    v-model:value="formData.instance.deviceWriteBpsText"
+                    :allow-clear="true"
+                    :placeholder="t('TXT_CODE_f0dc9eca')"
+                  />
+                </a-form-item>
+              </a-col>
+
+              <!-- GPU Configuration -->
+              <a-col :xs="24" :offset="0">
+                <a-divider orientation="left">{{ t("TXT_CODE_gpu_section_title") }}</a-divider>
+              </a-col>
+              <a-col :xs="24" :lg="8" :offset="0">
+                <a-form-item>
+                  <a-typography-title :level="5">{{ t("TXT_CODE_gpu_enable") }}</a-typography-title>
+                  <a-typography-paragraph>
+                    <a-tooltip :title="t('TXT_CODE_gpu_enable_help')" placement="top">
+                      <a-typography-text type="secondary" class="typography-text-ellipsis">
+                        {{ t("TXT_CODE_gpu_enable_help") }}
+                      </a-typography-text>
+                    </a-tooltip>
+                  </a-typography-paragraph>
+                  <a-switch
+                    v-model:checked="formData.instance.config.docker.gpuEnabled"
+                    :checked-children="t('TXT_CODE_gpu_enabled')"
+                    :un-checked-children="t('TXT_CODE_gpu_disabled')"
+                  />
+                </a-form-item>
+              </a-col>
+              <template v-if="formData.instance?.config?.docker?.gpuEnabled">
+                <a-col :xs="24" :lg="8" :offset="0">
+                  <a-form-item>
+                    <a-typography-title :level="5">{{
+                      t("TXT_CODE_gpu_driver")
+                    }}</a-typography-title>
+                    <a-typography-paragraph>
+                      <a-tooltip :title="t('TXT_CODE_gpu_driver_help')" placement="top">
+                        <a-typography-text type="secondary" class="typography-text-ellipsis">
+                          {{ t("TXT_CODE_gpu_driver_help") }}
+                        </a-typography-text>
+                      </a-tooltip>
+                    </a-typography-paragraph>
+                    <a-input
+                      v-model:value="formData.instance.config.docker.gpuDriver"
+                      :placeholder="t('TXT_CODE_gpu_driver_placeholder')"
+                    />
+                  </a-form-item>
+                </a-col>
+                <a-col :xs="24" :lg="8" :offset="0">
+                  <a-form-item>
+                    <a-typography-title :level="5">{{
+                      t("TXT_CODE_gpu_alloc_mode")
+                    }}</a-typography-title>
+                    <a-typography-paragraph>
+                      <a-tooltip :title="t('TXT_CODE_gpu_alloc_mode_help')" placement="top">
+                        <a-typography-text type="secondary" class="typography-text-ellipsis">
+                          {{ t("TXT_CODE_gpu_alloc_mode_help") }}
+                        </a-typography-text>
+                      </a-tooltip>
+                    </a-typography-paragraph>
+                    <a-radio-group v-model:value="gpuAllocMode" @change="onGpuAllocModeChange">
+                      <a-radio-button value="all">{{ t("TXT_CODE_gpu_alloc_all") }}</a-radio-button>
+                      <a-radio-button value="count">{{
+                        t("TXT_CODE_gpu_alloc_count")
+                      }}</a-radio-button>
+                      <a-radio-button value="deviceIds">{{
+                        t("TXT_CODE_gpu_alloc_device_ids")
+                      }}</a-radio-button>
+                    </a-radio-group>
+                  </a-form-item>
+                </a-col>
+                <a-col v-if="gpuAllocMode === 'count'" :xs="24" :lg="8" :offset="0">
+                  <a-form-item>
+                    <a-typography-title :level="5">{{
+                      t("TXT_CODE_gpu_count")
+                    }}</a-typography-title>
+                    <a-typography-paragraph>
+                      <a-tooltip :title="t('TXT_CODE_gpu_count_help')" placement="top">
+                        <a-typography-text type="secondary" class="typography-text-ellipsis">
+                          {{ t("TXT_CODE_gpu_count_help") }}
+                        </a-typography-text>
+                      </a-tooltip>
+                    </a-typography-paragraph>
+                    <a-input-number
+                      v-model:value="formData.instance.config.docker.gpuCount"
+                      :min="1"
+                      :max="128"
+                      :precision="0"
+                      style="width: 100%"
+                      :placeholder="t('TXT_CODE_gpu_count_placeholder')"
+                    />
+                  </a-form-item>
+                </a-col>
+                <a-col v-if="gpuAllocMode === 'deviceIds'" :xs="24" :lg="16" :offset="0">
+                  <a-form-item>
+                    <a-typography-title :level="5">{{
+                      t("TXT_CODE_gpu_device_ids")
+                    }}</a-typography-title>
+                    <a-typography-paragraph>
+                      <a-tooltip :title="t('TXT_CODE_gpu_device_ids_help')" placement="top">
+                        <a-typography-text type="secondary" class="typography-text-ellipsis">
+                          {{ t("TXT_CODE_gpu_device_ids_help") }}
+                        </a-typography-text>
+                      </a-tooltip>
+                    </a-typography-paragraph>
+                    <a-input
+                      v-model:value="gpuDeviceIdsText"
+                      :placeholder="t('TXT_CODE_gpu_device_ids_placeholder')"
+                    />
+                  </a-form-item>
+                </a-col>
+              </template>
             </a-row>
           </a-tab-pane>
         </a-tabs>

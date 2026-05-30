@@ -12,6 +12,7 @@ const PIECE_SIZE = 1024 * 1024 * 2;
 type UploadOptions = {
   overwrite: boolean;
   unzip?: boolean;
+  deleteAfterUnzip?: boolean;
   code?: string;
 };
 
@@ -56,7 +57,6 @@ export class UploadFiles {
         params: {
           filename: this.file.name,
           size: this.file.size,
-          // sum: await fileSum(this.file),
           sum: "",
           ...options
         }

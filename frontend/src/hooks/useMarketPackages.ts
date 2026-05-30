@@ -2,7 +2,6 @@ import { getCurrentLang, t } from "@/lang/i18n";
 import { quickInstallListAddr } from "@/services/apis/instance";
 import { reportErrorMsg } from "@/tools/validator";
 import type { QuickStartPackages } from "@/types";
-import { Modal } from "ant-design-vue";
 import { computed, reactive, ref } from "vue";
 import type { ComputedNodeInfo } from "./useOverviewInfo";
 
@@ -262,7 +261,15 @@ export function useMarketPackages(options: UseMarketPackagesOptions = {}) {
   const handleSelectTopCategory = (item: QuickStartPackages, node?: ComputedNodeInfo) => {
     searchForm.gameType = item.gameType;
     searchForm.isSupportDocker = node?.dockerPlatforms?.length ? true : false;
-    searchForm.platform = node?.system?.type ?? SEARCH_ALL_KEY;
+    let platform = SEARCH_ALL_KEY;
+    if (
+      String(node?.system?.type)
+        .toLowerCase()
+        .includes("windows")
+    ) {
+      platform = "Windows";
+    }
+    searchForm.platform = platform;
   };
 
   const { execute: getQuickInstallListAddr, isLoading: appListLoading } = quickInstallListAddr();
@@ -271,12 +278,6 @@ export function useMarketPackages(options: UseMarketPackagesOptions = {}) {
       const list = await getQuickInstallListAddr();
       languageOptions.value = list.value?.languages || [];
       packages.value = list.value?.packages || [];
-      if (!list.value?.packages || list.value?.packages.length === 0) {
-        Modal.error({
-          title: t("TXT_CODE_c534ca49"),
-          content: t("TXT_CODE_bcfaf14d")
-        });
-      }
     } catch (err: any) {
       console.error(err.message);
       return reportErrorMsg(err.message);

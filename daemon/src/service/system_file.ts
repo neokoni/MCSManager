@@ -7,8 +7,10 @@ import { compress, decompress } from "../common/compress";
 import { globalConfiguration } from "../entity/config";
 import { $t, i18next } from "../i18n";
 import { normalizedJoin } from "../tools/filepath";
+import { isFileSystemLink } from "../tools/path_link_check";
 
 const ERROR_MSG_01 = $t("TXT_CODE_system_file.illegalAccess");
+const ERROR_MSG_LINK = $t("TXT_CODE_system_file.linkNotAllowed");
 const MAX_EDIT_SIZE = 1024 * 1024 * 5;
 
 interface IFile {
@@ -41,10 +43,10 @@ export default class FileManager {
   toAbsolutePath(fileName: string = "") {
     const topAbsolutePath = this.topPath;
 
-    if (path.normalize(fileName).indexOf(topAbsolutePath) === 0) return fileName;
-
     let finalPath = "";
-    if (os.platform() === "win32") {
+    if (path.normalize(fileName).indexOf(topAbsolutePath) === 0) {
+      finalPath = fileName;
+    } else if (os.platform() === "win32") {
       const reg = new RegExp("^[A-Za-z]{1}:[\\\\/]{1}");
       if (reg.test(this.cwd)) {
         finalPath = path.normalize(path.join(this.cwd, fileName));
@@ -57,11 +59,11 @@ export default class FileManager {
       finalPath = path.normalize(path.join(this.topPath, this.cwd, fileName));
     }
 
-    if (
-      finalPath.indexOf(topAbsolutePath) !== 0 &&
-      topAbsolutePath !== "/" &&
-      topAbsolutePath !== "\\"
-    )
+    // fix the /app/ vs /app mismatch bug and keep it secure
+    const relative = path.relative(topAbsolutePath, finalPath);
+    const isOutside =
+      relative === ".." || relative.startsWith(".." + path.sep) || path.isAbsolute(relative);
+    if (isOutside && topAbsolutePath !== "/" && topAbsolutePath !== "\\")
       throw new Error(ERROR_MSG_01);
     return finalPath;
   }
@@ -78,6 +80,8 @@ export default class FileManager {
       ? topAbsolutePath.slice(0, -1)
       : topAbsolutePath;
 
+    this.assertNotLink(destPath);
+
     if (destPath.startsWith(topPath)) {
       const parts = destPath.split(path.sep);
       return topPath.split(path.sep).every((part, index) => {
@@ -87,9 +91,18 @@ export default class FileManager {
     return false;
   }
 
+  assertNotLink(fileNameOrPath: string) {
+    const absPath = this.toAbsolutePath(fileNameOrPath);
+    if (fs.existsSync(absPath) && isFileSystemLink(absPath)) {
+      throw new Error(ERROR_MSG_LINK);
+    }
+  }
+
   check(destPath: string) {
     if (this.isRootTopRath()) return true;
-    return this.checkPath(destPath) && fs.existsSync(this.toAbsolutePath(destPath));
+    if (!this.checkPath(destPath) || !fs.existsSync(this.toAbsolutePath(destPath))) return false;
+    this.assertNotLink(destPath);
+    return true;
   }
 
   cd(dirName: string) {
@@ -99,6 +112,8 @@ export default class FileManager {
 
   async list(page: 0, pageSize = 40, searchFileName?: string) {
     if (pageSize > 100 || pageSize <= 0 || page < 0) throw new Error("Beyond the value limit");
+
+    this.assertNotLink(".");
 
     // Use withFileTypes option to get file type directly, reducing stat calls
     const dirents = await fs.readdir(this.toAbsolutePath(), { withFileTypes: true });
@@ -227,13 +242,6 @@ export default class FileManager {
     await fs.move(targetPath, destPath);
   }
 
-  private zipFileCheck(path: string) {
-    const fileInfo = fs.statSync(path);
-    const MAX_ZIP_GB = globalConfiguration.config.maxZipFileSize;
-    if (fileInfo.size > 1024 * 1024 * 1024 * MAX_ZIP_GB)
-      throw new Error($t("TXT_CODE_system_file.unzipLimit", { max: MAX_ZIP_GB }));
-  }
-
   async unzip(sourceZip: string, destDir: string, code?: string) {
     if (!code) code = this.fileCode;
     if (!this.check(sourceZip) || !this.checkPath(destDir)) throw new Error(ERROR_MSG_01);
@@ -291,5 +299,13 @@ export default class FileManager {
       if (fileName.includes(ch)) return false;
     }
     return true;
+  }
+
+  private zipFileCheck(path: string) {
+    if (isFileSystemLink(path)) throw new Error(ERROR_MSG_LINK);
+    const fileInfo = fs.statSync(path);
+    const MAX_ZIP_GB = globalConfiguration.config.maxZipFileSize;
+    if (fileInfo.size > 1024 * 1024 * 1024 * MAX_ZIP_GB)
+      throw new Error($t("TXT_CODE_system_file.unzipLimit", { max: MAX_ZIP_GB }));
   }
 }
