@@ -150,11 +150,11 @@ routerApp.on("file/status", async (ctx, data) => {
 });
 
 // Create a new file
-routerApp.on("file/touch", (ctx, data) => {
+routerApp.on("file/touch", async (ctx, data) => {
   try {
     const target = data.target;
     const fileManager = getFileManager(data.instanceUuid);
-    fileManager.newFile(target);
+    await fileManager.newFile(target);
     protocol.response(ctx, true);
   } catch (error: any) {
     protocol.responseError(ctx, error);
@@ -162,11 +162,11 @@ routerApp.on("file/touch", (ctx, data) => {
 });
 
 // Create a directory
-routerApp.on("file/mkdir", (ctx, data) => {
+routerApp.on("file/mkdir", async (ctx, data) => {
   try {
     const target = data.target;
     const fileManager = getFileManager(data.instanceUuid);
-    fileManager.mkdir(target);
+    await fileManager.mkdir(target);
     protocol.response(ctx, true);
   } catch (error: any) {
     protocol.responseError(ctx, error);
@@ -188,7 +188,6 @@ routerApp.on("file/download_from_url", async (ctx, data) => {
 
     const fileManager = getFileManager(data.instanceUuid);
     fileManager.checkPath(fileName);
-    fileManager.assertNotLink(fileName);
     const targetPath = fileManager.toAbsolutePath(fileName);
 
     // Start download in background
@@ -225,7 +224,6 @@ routerApp.on("file/download_from_url_stop", (ctx, data) => {
     } else if (data.instanceUuid) {
       const fileManager = getFileManager(data.instanceUuid);
       fileManager.checkPath(data.fileName);
-      fileManager.assertNotLink(data.fileName);
       const targetPath = fileManager.toAbsolutePath(data.fileName);
 
       const result = downloadManager.stop(targetPath);

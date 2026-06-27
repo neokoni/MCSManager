@@ -193,9 +193,11 @@ services:
     ports:
       - "23333:23333"
     volumes:
+      - /etc/timezone:/etc/timezone:ro
       - /etc/localtime:/etc/localtime:ro
       - <CHANGE_ME_TO_INSTALL_PATH>/web/data:/opt/mcsmanager/web/data
       - <CHANGE_ME_TO_INSTALL_PATH>/web/logs:/opt/mcsmanager/web/logs
+      - <CHANGE_ME_TO_INSTALL_PATH>/web/public/upload_files:/opt/mcsmanager/web/public/upload_files
 
   daemon:
     image: githubyumao/mcsmanager-daemon:latest
@@ -247,6 +249,18 @@ docker compose pull && docker compose up -d
 
 - 所有代码必须符合国际化标准。
 
+### BUG 报告
+
+欢迎发现的任何问题进行反馈，必当及时修复。
+
+若发现严重安全漏洞又不便公开发布，请发送邮件至: support@mcsmanager.com，安全问题修复后将在代码中附加漏洞发现者姓名。
+
+### 鸣谢
+
+感谢以下开发者为 MCSManager 安全性提供重要的代码贡献！
+
+> [@Cuo256](https://github.com/Cuo256), [@xiaosu](https://github.com/xiaosuawa), [@tianjiefeifei](https://github.com/tianjiefeifei)
+
 <br />
 
 ## 开发此项目
@@ -291,14 +305,6 @@ docker compose pull && docker compose up -d
 
 - 支持 `Chrome` `Firefox` `Safari` `Opera` 等现代主流浏览器。
 - 已放弃支持 `IE` 浏览器。
-
-<br />
-
-## BUG 报告
-
-欢迎发现的任何问题进行反馈，必当及时修复。
-
-若发现严重安全漏洞又不便公开发布，请发送邮件至: support@mcsmanager.com，安全问题修复后将在代码中附加漏洞发现者姓名。
 
 <br />
 

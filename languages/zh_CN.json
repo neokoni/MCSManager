@@ -772,7 +772,7 @@
   "TXT_CODE_50511e8f": "默认玩家权限等级（游客: visitor | 会员: member | 管理员: operator",
   "TXT_CODE_50697989": "利用远程主机地址与模糊查询来为此用户增加应用实例",
   "TXT_CODE_509d7d9a": "Spigot 配置文件，能够进一步的控制服务器的行为和具体参数，一些更为高级的限制都在此配置文件中",
-  "TXT_CODE_50a2b2d9": "同时，此选项也会影响实例 Docker 容器中的用户，如果您不知道这意味着什么，请不要修改它。",
+  "TXT_CODE_50a2b2d9": "同时此选项也会影响实例 Docker 容器中的用户：留空则普通实例继承面板用户，Docker 实例使用镜像默认用户。不确定请勿修改。",
   "TXT_CODE_50aa56a1": "允许使用命令 /timings。用于测量插件为事件所花费的时间",
   "TXT_CODE_50d471b2": "重置",
   "TXT_CODE_NETWORK_CURRENT": "网络",
@@ -1629,7 +1629,7 @@
   "TXT_CODE_99fab05d": "是否允许重生锚爆炸。将此设置为false只会让重生锚消失。",
   "TXT_CODE_9a6e35e4": "禁用玩家互动",
   "TXT_CODE_9aa1872c": "对闪电免疫的物品列表",
-  "TXT_CODE_9aa83c05": "默认继承并使用启动面板的系统用户",
+  "TXT_CODE_9aa83c05": "留空使用面板用户",
   "TXT_CODE_9ab6fd": "用户 <<operator_name>> 创建了 <<instance_name>> 实例",
   "TXT_CODE_9ac035d0": "服务器名称隐私设置",
   "TXT_CODE_9ac051fb": "在基岩版玩家库存中标记不可用插槽的物品。",
@@ -3188,6 +3188,9 @@
   "TXT_CODE_general_stop.execCmd": "已执行预设的关闭命令：{{stopCommand}}\n如果无法关闭实例请前往实例设置更改关闭实例的正确命令，比如 ^C，stop，end 等",
   "TXT_CODE_general_stop.notRunning": "实例未处于运行中状态，无法进行停止.",
   "TXT_CODE_general_stop.stopErr": "关闭命令已发出但长时间未能关闭实例，可能是实例关闭命令错误或实例进程假死导致，现在将恢复到运行中状态，可使用强制终止指令结束进程。",
+  "TXT_CODE_general_stop.timeoutKill": "已发送关闭实例命令，但实例在 {{seconds}} 秒内仍未关闭，正在自动强制终止...",
+  "TXT_CODE_f26ad72e": "停止超时（秒）",
+  "TXT_CODE_62232876": "发送关闭实例命令后，超过此秒数仍未关闭，将自动强制终止，设为 0 代表停用。",
   "TXT_CODE_general_update.cmdFormatErr": "更新命令格式错误，请联系管理员",
   "TXT_CODE_general_update.err": "错误",
   "TXT_CODE_general_update.error": "更新错误: {{err}}",
@@ -3445,6 +3448,5 @@
   "TXT_CODE_6542489a": "例如: /dev/sda:10MB",
   "TXT_CODE_9d2e6d5e": "设备写入速率限制 (BPS)",
   "TXT_CODE_2b2ff3ff": "限制容器对特定块设备的写入速率。格式如: /dev/sda:5MB。多个设备用逗号分隔。",
-  "TXT_CODE_f0dc9eca": "例如: /dev/sda:5MB",
-  "TXT_CODE_system_file.linkNotAllowed": "Symbolic links and hard links are not allowed for this operation"
+  "TXT_CODE_f0dc9eca": "例如: /dev/sda:5MB"
 }

@@ -203,9 +203,11 @@ services:
     ports:
       - "23333:23333"
     volumes:
+      - /etc/timezone:/etc/timezone:ro
       - /etc/localtime:/etc/localtime:ro
       - <CHANGE_ME_TO_INSTALL_PATH>/web/data:/opt/mcsmanager/web/data
       - <CHANGE_ME_TO_INSTALL_PATH>/web/logs:/opt/mcsmanager/web/logs
+      - <CHANGE_ME_TO_INSTALL_PATH>/web/public/upload_files:/opt/mcsmanager/web/public/upload_files
 
   daemon:
     image: githubyumao/mcsmanager-daemon:latest
@@ -256,6 +258,22 @@ Before contributing code to this project, please make sure to review the followi
 - **Must read:** [Issue #599 – Contribution Guidelines](https://github.com/MCSManager/MCSManager/issues/599)
 - Please maintain the existing code structure and formatting, **do not apply unnecessary or excessive formatting changes.**
 - All submitted code **must follow internationalization (i18n) standards**.
+
+### Bug Reports
+
+We welcome all bug reports and feedback. Your contributions help us improve the project.
+
+If you encounter any issues, please report them via the [GitHub Issues](https://github.com/MCSManager/MCSManager/issues) page, and we’ll address them as soon as possible.
+
+For serious **security vulnerabilities** that should not be disclosed publicly, please contact us directly at: **support@mcsmanager.com**
+
+Once resolved, we will credit the discoverer in the relevant code or release notes.
+
+### Acknowledgements
+
+Thanks to the following developers for making important contributions to the security testing of MCSManager!
+
+> [@Cuo256](https://github.com/Cuo256), [@xiaosu](https://github.com/xiaosuawa), [@tianjiefeifei](https://github.com/tianjiefeifei)
 
 <br />
 
@@ -308,17 +326,6 @@ MCSManager supports all major modern browsers, including:
 
 <br />
 
-## Bug Reports
-
-We welcome all bug reports and feedback. Your contributions help us improve the project.
-
-If you encounter any issues, please report them via the [GitHub Issues](https://github.com/MCSManager/MCSManager/issues) page, and we’ll address them as soon as possible.
-
-For serious **security vulnerabilities** that should not be disclosed publicly, please contact us directly at: **support@mcsmanager.com**
-
-Once resolved, we will credit the discoverer in the relevant code or release notes.
-
-<br />
 
 ## Contributors
 
