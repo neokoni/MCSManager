@@ -59,6 +59,27 @@ export default class SystemConfig {
   // Whether to allow users to edit the start & update command of Docker instances
   allowChangeCmd = false;
 
+  // This option determines whether the entire panel can use an API key.
+  // If set to fail, even if the user has already generated an API key,
+  // they will no longer be able to use it.
+  enableApiKey: boolean | "ONLY_ADMIN" = false;
+
+  // Operation audit log settings
+  // Whether to record user operations (audit log)
+  operationLogEnabled = true;
+  // Rotate to a new JSONL file after this many records (a new file also starts each day)
+  operationLogMaxLinesPerFile = 200;
+  // Delete log files older than N days (0 = keep forever)
+  operationLogKeepDays = 30;
+  // Delete the oldest log files when the total record count exceeds N (0 = unlimited)
+  operationLogMaxTotalLines = 20000;
+  // Per-category recording switches
+  operationLogRecordLogin = true;
+  operationLogRecordInstance = true;
+  operationLogRecordFile = true;
+  operationLogRecordUser = true;
+  operationLogRecordSystem = true;
+
   // -----
   // After it is enabled, you can connect to the redeem.mcsmanager.com platform
   // to sell instances based on redeem
@@ -87,6 +108,7 @@ export default class SystemConfig {
   // Shared
   ssoClientId = "";
   ssoClientSecret = "";
+  ssoTokenAuthMethod: "auto" | "client_secret_basic" | "client_secret_post" = "auto";
   ssoCallbackUrl = "";
 
   // Whether to enable SSL/TLS (HTTPS)

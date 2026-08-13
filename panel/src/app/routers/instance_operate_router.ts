@@ -1,12 +1,15 @@
 import Router from "@koa/router";
 import { isEmpty, toBoolean, toNumber, toText } from "mcsmanager-common";
+import { diffConfig } from "../common/config_diff";
 import { ROLE } from "../entity/user";
 import { $t } from "../i18n";
 import { speedLimit } from "../middleware/limit";
 import permission from "../middleware/permission";
 import validator from "../middleware/validator";
+import { updateInstanceWithAudit } from "../service/instance_config_audit";
+import { getInstanceNameSafely } from "../service/instance_name_service";
 import { checkInstanceAdvancedParams, getAppMarketList } from "../service/instance_service";
-import { operationLogger } from "../service/operation_logger";
+import { getOperationLoggerOperator, operationLogger } from "../service/operation_logger";
 import { getUserPermission, getUserUuid } from "../service/passport_service";
 import { timeUuid } from "../service/password";
 import { isHaveInstanceByUuid, isTopPermissionByUuid } from "../service/permission_service";
@@ -46,8 +49,7 @@ router.all(
       operationLogger.log("instance_start", {
         daemon_id: daemonId,
         instance_id: instanceUuid,
-        operator_ip: ctx.ip,
-        operator_name: ctx.session?.["userName"],
+        ...getOperationLoggerOperator(ctx),
         instance_name: result?.instances?.[0]?.nickname
       });
       ctx.body = result;
@@ -78,8 +80,7 @@ router.all(
       operationLogger.log("instance_stop", {
         daemon_id: daemonId,
         instance_id: instanceUuid,
-        operator_ip: ctx.ip,
-        operator_name: ctx.session?.["userName"],
+        ...getOperationLoggerOperator(ctx),
         instance_name: result?.instances?.[0]?.nickname
       });
       ctx.body = result;
@@ -130,8 +131,7 @@ router.all(
       operationLogger.log("instance_restart", {
         daemon_id: daemonId,
         instance_id: instanceUuid,
-        operator_ip: ctx.ip,
-        operator_name: ctx.session?.["userName"],
+        ...getOperationLoggerOperator(ctx),
         instance_name: result?.instances?.[0]?.nickname
       });
       ctx.body = result;
@@ -158,8 +158,7 @@ router.all(
       operationLogger.warning("instance_kill", {
         daemon_id: daemonId,
         instance_id: instanceUuid,
-        operator_ip: ctx.ip,
-        operator_name: ctx.session?.["userName"],
+        ...getOperationLoggerOperator(ctx),
         instance_name: result?.instances?.[0]?.nickname
       });
       ctx.body = result;
@@ -330,6 +329,17 @@ router.put(
       const type = String(ctx.query.type);
       const config = ctx.request.body;
       const remoteService = RemoteServiceSubsystem.getInstance(daemonId);
+
+      let configBefore: any = null;
+      try {
+        configBefore = await new RemoteRequest(remoteService).request(
+          "instance/process_config/file",
+          { instanceUuid, fileName, config: null, type }
+        );
+      } catch (err) {
+        configBefore = null;
+      }
+
       const result = await new RemoteRequest(remoteService).request(
         "instance/process_config/file",
         {
@@ -339,6 +349,15 @@ router.put(
           type
         }
       );
+      if (diffConfig(configBefore, config)) {
+        operationLogger.log("instance_file_update", {
+          ...getOperationLoggerOperator(ctx),
+          instance_id: instanceUuid,
+          daemon_id: daemonId,
+          instance_name: await getInstanceNameSafely(daemonId, instanceUuid),
+          file: fileName
+        });
+      }
       ctx.body = result;
     } catch (err) {
       ctx.body = err;
@@ -423,26 +442,30 @@ router.put(
       let advancedConfig = {};
       advancedConfig = checkInstanceAdvancedParams(config, isTopPermission);
 
-      await new RemoteRequest(remoteService).request("instance/update", {
-        instanceUuid,
-        config: {
-          pingConfig: !isEmpty(config.pingConfig) ? pingConfig : null,
-          eventTask: !isEmpty(config.eventTask) ? eventTask : null,
-          terminalOption: !isEmpty(config.terminalOption) ? terminalOption : null,
-          extraServiceConfig: !isEmpty(config.extraServiceConfig) ? extraServiceConfig : null,
-          crlf,
-          oe,
-          ie,
-          stopCommand,
-          rconIp,
-          rconPort,
-          rconPassword,
-          enableRcon,
-          tag: instanceTags,
-          fileCode,
-          ...advancedConfig
-        }
-      });
+      const finalConfig = {
+        pingConfig: !isEmpty(config.pingConfig) ? pingConfig : null,
+        eventTask: !isEmpty(config.eventTask) ? eventTask : null,
+        terminalOption: !isEmpty(config.terminalOption) ? terminalOption : null,
+        extraServiceConfig: !isEmpty(config.extraServiceConfig) ? extraServiceConfig : null,
+        crlf,
+        oe,
+        ie,
+        stopCommand,
+        rconIp,
+        rconPort,
+        rconPassword,
+        enableRcon,
+        tag: instanceTags,
+        fileCode,
+        ...advancedConfig
+      };
+
+      await updateInstanceWithAudit(ctx, daemonId || "", instanceUuid || "", () =>
+        new RemoteRequest(remoteService).request("instance/update", {
+          instanceUuid,
+          config: finalConfig
+        })
+      );
       ctx.body = true;
     } catch (err) {
       ctx.body = err;

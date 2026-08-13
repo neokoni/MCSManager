@@ -91,6 +91,7 @@ export interface Settings {
   businessMode: boolean;
   businessId: string;
   allowChangeCmd: boolean;
+  enableApiKey: boolean | "ONLY_ADMIN";
   registerCode: string;
   panelId: string;
   ssoEnabled: boolean;
@@ -101,7 +102,17 @@ export interface Settings {
   ssoIssuer: string;
   ssoClientId: string;
   ssoClientSecret: string;
+  ssoTokenAuthMethod: string;
   ssoCallbackUrl: string;
+  operationLogEnabled: boolean;
+  operationLogMaxLinesPerFile: number;
+  operationLogKeepDays: number;
+  operationLogMaxTotalLines: number;
+  operationLogRecordLogin: boolean;
+  operationLogRecordInstance: boolean;
+  operationLogRecordFile: boolean;
+  operationLogRecordUser: boolean;
+  operationLogRecordSystem: boolean;
 }
 
 export interface ImageInfo {

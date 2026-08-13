@@ -1,8 +1,9 @@
 import Router from "@koa/router";
+import { diffConfig } from "../common/config_diff";
 import { ROLE } from "../entity/user";
 import permission from "../middleware/permission";
 import validator from "../middleware/validator";
-import { operationLogger } from "../service/operation_logger";
+import { getOperationLoggerOperator, operationLogger } from "../service/operation_logger";
 import RemoteRequest from "../service/remote_command";
 import RemoteServiceSubsystem from "../service/remote_service";
 
@@ -166,8 +167,7 @@ router.post(
     });
 
     operationLogger.log("daemon_create", {
-      operator_ip: ctx.ip,
-      operator_name: ctx.session?.["userName"],
+      ...getOperationLoggerOperator(ctx),
       daemon_id: instance.uuid
     });
 
@@ -196,6 +196,19 @@ router.put(
 
     if (!RemoteServiceSubsystem.services.has(uuid)) throw new Error("Instance does not exist");
 
+    const snapshotDaemonConfig = (daemonId: string) => {
+      const config = RemoteServiceSubsystem.getInstance(daemonId)?.config;
+      if (!config) return null;
+      return {
+        port: config.port,
+        ip: config.ip,
+        prefix: config.prefix,
+        remarks: config.remarks,
+        remoteMappings: JSON.parse(JSON.stringify(config.remoteMappings ?? []))
+      };
+    };
+
+    const configBefore = snapshotDaemonConfig(uuid);
     await RemoteServiceSubsystem.edit(uuid, {
       port: parameter.port,
       ip: parameter.ip,
@@ -204,12 +217,21 @@ router.put(
       remarks: parameter.remarks,
       remoteMappings: parameter.remoteMappings ?? []
     });
+    const configAfter = snapshotDaemonConfig(uuid);
 
-    operationLogger.log("daemon_config_change", {
-      operator_ip: ctx.ip,
-      operator_name: ctx.session?.["userName"],
-      daemon_id: uuid
-    });
+    const diff = diffConfig(configBefore, configAfter);
+    if (diff) {
+      operationLogger.log(
+        "daemon_config_change",
+        {
+          ...getOperationLoggerOperator(ctx),
+          daemon_id: uuid,
+          config_before: diff.before,
+          config_after: diff.after
+        },
+        "warning"
+      );
+    }
 
     ctx.body = true;
   }
@@ -224,12 +246,17 @@ router.delete(
   async (ctx) => {
     const uuid = String(ctx.request.query.uuid);
     if (!RemoteServiceSubsystem.services.has(uuid)) throw new Error("Instance does not exist");
+    const daemonName = RemoteServiceSubsystem.getInstance(uuid)?.config?.remarks;
     await RemoteServiceSubsystem.deleteRemoteService(uuid);
-    operationLogger.log("daemon_remove", {
-      operator_ip: ctx.ip,
-      operator_name: ctx.session?.["userName"],
-      daemon_id: uuid
-    });
+    operationLogger.log(
+      "daemon_remove",
+      {
+        ...getOperationLoggerOperator(ctx),
+        daemon_id: uuid,
+        daemon_name: daemonName
+      },
+      "error"
+    );
     ctx.body = true;
   }
 );

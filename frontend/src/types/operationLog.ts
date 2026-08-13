@@ -4,12 +4,14 @@ export type GlobalGeneralOptions = {
   operation_level: "info" | "warning" | "error";
   operator_ip: string;
   operator_name?: string;
+  operator_source?: "api";
 };
 
 export type InstanceGeneralOptions = {
   instance_id: string;
   daemon_id: string;
   instance_name?: string;
+  daemon_name?: string;
 } & GlobalGeneralOptions;
 
 export type InstanceStartOptions = {
@@ -34,6 +36,8 @@ export type InstanceKillOptions = {
 
 export type InstanceConfigChangeOptions = {
   type: "instance_config_change";
+  config_before?: any;
+  config_after?: any;
 } & InstanceGeneralOptions;
 
 export type InstanceCreateOptions = {
@@ -61,7 +65,8 @@ export type InstanceFileDownloadOptions = {
 
 export type InstanceFileDeleteOptions = {
   type: "instance_file_delete";
-  file: string;
+  // Deletion is always a batch operation
+  file: string | string[];
 } & InstanceGeneralOptions;
 
 export type InstanceTaskCreateOptions = {
@@ -77,16 +82,21 @@ export type InstanceTaskDeleteOptions = {
 export type DaemonCreateOptions = {
   type: "daemon_create";
   daemon_id: string;
+  daemon_name?: string;
 } & GlobalGeneralOptions;
 
 export type DaemonRemoveOptions = {
   type: "daemon_remove";
   daemon_id: string;
+  daemon_name?: string;
 } & GlobalGeneralOptions;
 
 export type DaemonConfigChangeOptions = {
   type: "daemon_config_change";
   daemon_id: string;
+  daemon_name?: string;
+  config_before?: any;
+  config_after?: any;
 } & GlobalGeneralOptions;
 
 export type UserCreateOptions = {
@@ -101,15 +111,63 @@ export type UserDeleteOptions = {
 
 export type UserConfigChangeOptions = {
   type: "user_config_change";
+  target_user_name?: string;
+  password_reset?: boolean;
+  config_before?: any;
+  config_after?: any;
 } & GlobalGeneralOptions;
 
 export type UserLoginOptions = {
   type: "user_login";
   login_result: boolean;
+  login_method?: string;
+} & GlobalGeneralOptions;
+
+export type SsoUnbindOptions = {
+  type: "sso_unbind";
+  target_user_name: string;
 } & GlobalGeneralOptions;
 
 export type SystemConfigChangeOptions = {
   type: "system_config_change";
+  config_before?: any;
+  config_after?: any;
+} & GlobalGeneralOptions;
+
+export type InstanceFileDownloadFromUrlOptions = {
+  type: "instance_file_download_from_url";
+  url: string;
+  file: string;
+} & InstanceGeneralOptions;
+
+export type InstanceFileRenameOptions = {
+  type: "instance_file_rename";
+  file_before: string;
+  file_after: string;
+} & InstanceGeneralOptions;
+
+export type InstanceFileMoveOptions = {
+  type: "instance_file_move";
+  file_before: string;
+  file_after: string;
+} & InstanceGeneralOptions;
+
+export type InstanceFileCompressOptions = {
+  type: "instance_file_compress";
+  file: string;
+  targets?: string[];
+} & InstanceGeneralOptions;
+
+export type InstanceFileDecompressOptions = {
+  type: "instance_file_decompress";
+  file: string;
+  target_dir?: string;
+} & InstanceGeneralOptions;
+
+export type UserApiKeyChangeOptions = {
+  type: "user_apikey_change";
+  target_user_name: string;
+  enabled: boolean;
 } & GlobalGeneralOptions;
 
 export type OperationLoggerItem =
@@ -121,10 +179,15 @@ export type OperationLoggerItem =
   | InstanceConfigChangeOptions
   | InstanceCreateOptions
   | InstanceDeleteOptions
+  | InstanceFileDownloadFromUrlOptions
   | InstanceFileUploadOptions
   | InstanceFileUpdateOptions
   | InstanceFileDownloadOptions
   | InstanceFileDeleteOptions
+  | InstanceFileRenameOptions
+  | InstanceFileMoveOptions
+  | InstanceFileCompressOptions
+  | InstanceFileDecompressOptions
   | InstanceTaskCreateOptions
   | InstanceTaskDeleteOptions
   | DaemonCreateOptions
@@ -133,5 +196,17 @@ export type OperationLoggerItem =
   | UserCreateOptions
   | UserDeleteOptions
   | UserConfigChangeOptions
+  | UserApiKeyChangeOptions
   | UserLoginOptions
+  | SsoUnbindOptions
   | SystemConfigChangeOptions;
+
+export type OperationLoggerType = OperationLoggerItem["type"];
+
+export interface OperationLogQueryResult {
+  page: number;
+  pageSize: number;
+  maxPage: number;
+  total: number;
+  data: OperationLoggerItem[];
+}
