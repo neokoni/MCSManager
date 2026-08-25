@@ -82,6 +82,8 @@ export const getModBatchInfoApi = useDefineApi<
 export const searchModsApi = useDefineApi<
   {
     params: {
+      daemonId: string;
+      uuid: string;
       query: string;
       source?: string;
       version?: string;
@@ -101,6 +103,8 @@ export const searchModsApi = useDefineApi<
 export const getModVersionsApi = useDefineApi<
   {
     params: {
+      daemonId: string;
+      uuid: string;
       projectId: string;
       source?: string;
     };

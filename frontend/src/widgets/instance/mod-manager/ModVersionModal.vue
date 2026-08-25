@@ -128,11 +128,21 @@ const isInstalled = (record: any) => {
 
 const columns = computed(() => {
   const base = [
-    { title: t("TXT_CODE_VERSION_NAME"), dataIndex: "name", key: "name" },
-    { title: t("TXT_CODE_VERSION_NUMBER"), dataIndex: "version_number", key: "version_number" },
-    { title: t("TXT_CODE_GAME_VERSION"), dataIndex: "game_versions", key: "game_versions" },
-    { title: t("TXT_CODE_LOADER"), dataIndex: "loaders", key: "loaders" },
-    { title: t("TXT_CODE_OPERATE"), key: "action" }
+    { title: t("TXT_CODE_VERSION_NAME"), dataIndex: "name", key: "name", width: 130 },
+    {
+      title: t("TXT_CODE_VERSION_NUMBER"),
+      dataIndex: "version_number",
+      key: "version_number",
+      width: 80
+    },
+    {
+      title: t("TXT_CODE_GAME_VERSION"),
+      dataIndex: "game_versions",
+      key: "game_versions",
+      width: 100
+    },
+    { title: t("TXT_CODE_LOADER"), dataIndex: "loaders", key: "loaders", width: 500 },
+    { title: t("TXT_CODE_OPERATE"), key: "action", width: 90 }
   ];
   return isPhone.value ? base.filter((c) => ["name", "action"].includes(c.key!)) : base;
 });

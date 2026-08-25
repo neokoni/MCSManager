@@ -127,7 +127,7 @@ export enum ScheduleCreateType {
 }
 
 export const defaultDockerConfig: IGlobalInstanceDockerConfig = {
-  updateCommandImage: "HOST",
+  updateCommandImage: "",
   containerName: "",
   image: "",
   memory: undefined,
@@ -192,7 +192,7 @@ export const defaultInstanceInfo: IGlobalInstanceConfig = {
   // Old fields
   terminalOption: {
     haveColor: true,
-    pty: false,
+    pty: true,
     ptyWindowCol: 164,
     ptyWindowRow: 40
   },
