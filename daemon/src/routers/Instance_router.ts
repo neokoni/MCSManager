@@ -1,10 +1,24 @@
+/**
+ * MANDATORY TEST GATE — DO NOT MODIFY WITHOUT RE-RUNNING THE INTEGRATION TESTS.
+ *
+ * This router is exercised by the real instance/Docker integration suite in
+ * `src/routers/__test__/Instance_router.integration.test.ts` (real containers, real child
+ * processes, and the interactive `test/fixtures/test.mjs` app). Any change here
+ * can break container/process startup, output capture, termination or
+ * destruction.
+ *
+ * After editing this file, AI assistants and developers MUST run the
+ * `mcsmanager-test` skill and confirm the Docker + general
+ * process instance cases pass before finishing.
+ *   Skill: `.agents/skills/mcsmanager-test/SKILL.md`
+ */
 import fs from "fs-extra";
 import path from "path";
 import Instance from "../entity/instance/instance";
 import { $t } from "../i18n";
 import logger from "../service/log";
 import * as protocol from "../service/protocol";
-import { routerApp } from "../service/router";
+import { routerApp } from "../service/router_app";
 import InstanceSubsystem from "../service/system_instance";
 
 import { arrayUnique, toNumber } from "mcsmanager-common";
@@ -391,7 +405,7 @@ routerApp.on("instance/asynchronous", (ctx, data) => {
   if (taskName === "quick_install" && role === ROLE.ADMIN) {
     const newInstanceName = String(parameter.newInstanceName);
     const targetLink = String(parameter.targetLink);
-    logger.info(`Quick install: Name: ${newInstanceName} | Download: ${targetLink}`);
+    logger.info(`Quick install: Name: ${newInstanceName}`);
     const task = createQuickInstallTask(targetLink, newInstanceName, parameter.setupInfo);
     return protocol.response(ctx, task.toObject());
   }
@@ -584,11 +598,12 @@ routerApp.on("instance/mods/list", async (ctx, data) => {
   const page = Number(data.page) || 1;
   const pageSize = Math.min(Number(data.pageSize) || 50, 50); // Max 50
   const folder = data.folder ? String(data.folder) : undefined;
+  const search = data.search ? String(data.search) : undefined;
   try {
     const fileManager = new FileManager(
       InstanceSubsystem.getInstance(instanceUuid)!.absoluteCwdPath()
     );
-    const mods = await modService.listMods(instanceUuid, page, pageSize, folder);
+    const mods = await modService.listMods(instanceUuid, page, pageSize, folder, search);
     const downloadTasks = downloadManager.tasks
       .filter((t) => fileManager.checkPath(t.path))
       .map((t) => {

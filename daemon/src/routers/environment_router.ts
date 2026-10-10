@@ -5,7 +5,7 @@ import { $t } from "../i18n";
 import { DockerManager } from "../service/docker_service";
 import logger from "../service/log";
 import * as protocol from "../service/protocol";
-import { routerApp } from "../service/router";
+import { routerApp } from "../service/router_app";
 
 // Get the image list of this system
 routerApp.on("environment/images", async (ctx, data) => {
@@ -34,6 +34,18 @@ routerApp.on("environment/networkModes", async (ctx, data) => {
   try {
     const docker = new DockerManager().getDocker();
     const result = await docker.listNetworks();
+    // Docker always lists the built-in "host" and "none" modes; Podman's Docker-compatible API does not,
+    // which would make them impossible to select. Add them when the engine doesn't report them.
+    for (const mode of ["host", "none"]) {
+      if (!result.some((network) => network.Name === mode)) {
+        result.push({
+          Name: mode,
+          Id: mode,
+          Driver: mode,
+          Scope: "local"
+        } as (typeof result)[number]);
+      }
+    }
     protocol.response(ctx, result);
   } catch (error: any) {
     protocol.responseError(ctx, error);

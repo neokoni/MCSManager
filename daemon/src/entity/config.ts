@@ -1,5 +1,8 @@
+import fs from "fs-extra";
+import path from "path";
 import { v4 } from "uuid";
 import StorageSubsystem from "../common/system_storage";
+import logger from "../service/log";
 
 function builderPassword() {
   const a = `${v4().replace(/\-/gim, "")}`;
@@ -49,12 +52,34 @@ class Config {
   ssl = false;
   sslPemPath = "";
   sslKeyPath = "";
+
+  // ---- Update source (manifest URL for manual self-update) ----
+  // Full URL to a manifest.json describing available updates, e.g.
+  // "https://mcsmanager.com/upgrade/manifest.json". Empty => update info unavailable.
+  public updateSourceUrl = "https://mcsmanager.com/upgrade/manifest.json";
 }
 
 // daemon configuration class
 class GlobalConfiguration {
   public config = new Config();
   private static readonly ID = "global";
+
+  // The config file contains the access key (secret). Keep it owner-only
+  // (0700) so other local users cannot read it. StorageSubsystem.store()
+  // writes via tmp+rename, so permissions must be re-applied after every
+  // write as well (see store()/load()).
+  private restrictConfigFilePermission() {
+    const filePath = path.normalize(
+      path.join(process.cwd(), "data", "Config", `${GlobalConfiguration.ID}.json`)
+    );
+    try {
+      fs.chmodSync(filePath, 0o700);
+    } catch (error) {
+      // e.g. Windows (limited chmod support) or a foreign file owner —
+      // never let permission hardening break the startup/store flow.
+      logger.warn("Failed to restrict permissions of the config file:", error);
+    }
+  }
 
   load() {
     let config: Config = StorageSubsystem.load("Config", Config, GlobalConfiguration.ID);
@@ -63,10 +88,12 @@ class GlobalConfiguration {
       StorageSubsystem.store("Config", GlobalConfiguration.ID, config);
     }
     this.config = config;
+    this.restrictConfigFilePermission();
   }
 
   store() {
     StorageSubsystem.store("Config", GlobalConfiguration.ID, this.config);
+    this.restrictConfigFilePermission();
   }
 }
 

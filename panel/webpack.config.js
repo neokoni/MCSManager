@@ -1,5 +1,4 @@
 const path = require("path");
-const fs = require("fs");
 const nodeExternals = require("webpack-node-externals");
 
 /**
@@ -34,22 +33,6 @@ function externalNativeNodeBinary({ request }, callback) {
 }
 
 /**
- * Auto-detect ESM-only packages and bundle them
- * instead of externalizing with require()
- */
-function isEsmPackage(moduleName) {
-  try {
-    const parts = moduleName.split("/");
-    const pkgName = moduleName.startsWith("@") ? parts.slice(0, 2).join("/") : parts[0];
-    const pkgJsonPath = path.join(__dirname, "node_modules", pkgName, "package.json");
-    const pkg = JSON.parse(fs.readFileSync(pkgJsonPath, "utf-8"));
-    return pkg.type === "module";
-  } catch {
-    return false;
-  }
-}
-
-/**
  * @type {import('webpack').Configuration}
  */
 module.exports = {
@@ -61,6 +44,14 @@ module.exports = {
         test: /\.ts/,
         use: "ts-loader",
         exclude: /node_modules/
+      },
+      {
+        // formidable v2 (nested inside koa-body) loads its plugins via a dynamic
+        // `require(path.join(...))` that webpack cannot trace. This loader rewrites
+        // it into a statically-analyzable form so the plugin files get bundled into
+        // app.js. See webpack/formidable-plugin.loader.js.
+        test: /node_modules[\\/](?:koa-body[\\/]node_modules[\\/])?formidable[\\/]src[\\/]Formidable\.js$/,
+        loader: path.resolve(__dirname, "webpack/formidable-plugin.loader.js")
       }
     ]
   },
@@ -77,7 +68,7 @@ module.exports = {
     ? [...OPTIONAL_NATIVE_EXTERNALS, externalNativeNodeBinary]
     : [
         nodeExternals({
-          allowlist: ["mcsmanager-common", isEsmPackage]
+          allowlist: ["mcsmanager-common"]
         })
       ],
   output: {

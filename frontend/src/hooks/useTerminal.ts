@@ -18,6 +18,7 @@ import type { Socket } from "socket.io-client";
 import { computed, onMounted, onUnmounted, ref, unref } from "vue";
 import { makeSocketIo } from "./useSocketIo";
 import { createTerminalHistoryReplayGate } from "./terminalHistoryReplayGate";
+import { attachTerminalTouchControls } from "./useTerminalTouch";
 
 export const TERM_COLOR = {
   TERM_RESET: "\x1B[0m",
@@ -81,6 +82,7 @@ export function useTerminal() {
   });
 
   let fitAddonTask: NodeJS.Timer;
+  let removeTouchHandlers: (() => void) | undefined;
   let cachedSize = {
     w: 160,
     h: 40
@@ -187,60 +189,15 @@ export function useTerminal() {
     });
   };
 
-  const touchHandler = (event: TouchEvent) => {
-    const touches = event.changedTouches;
-    const first = touches[0];
-
-    let type = "";
-    switch (event.type) {
-      case "touchstart":
-        type = "mousedown";
-        break;
-      case "touchmove":
-        type = "mousemove";
-        break;
-      case "touchend":
-        type = "mouseup";
-        break;
-      default:
-        return;
-    }
-
-    const mouseEvent = new MouseEvent(type, {
-      bubbles: true,
-      cancelable: true,
-      view: window,
-      detail: 1,
-      screenX: first.screenX,
-      screenY: first.screenY,
-      clientX: first.clientX,
-      clientY: first.clientY,
-      ctrlKey: false,
-      altKey: false,
-      shiftKey: false,
-      metaKey: false,
-      button: 0,
-      relatedTarget: null
-    });
-
-    first.target.dispatchEvent(mouseEvent);
-    if (type === "mousedown") {
-      event.preventDefault();
-    }
-  };
-
   const initTerminalWindow = (element: HTMLElement) => {
     if (terminal.value) {
       throw new Error("Terminal already initialized, Please refresh the page!");
     }
 
-    // init touch handler
-    element.addEventListener("touchstart", touchHandler, true);
-    element.addEventListener("touchmove", touchHandler, true);
-    element.addEventListener("touchend", touchHandler, true);
-    element.addEventListener("touchcancel", touchHandler, true);
-
+    const isTouchCapable =
+      window.matchMedia("(pointer: coarse)").matches || navigator.maxTouchPoints > 0;
     const background = hasBgImage.value ? "#00000000" : "#1e1e1e";
+    const selectionBackground = "rgba(255, 255, 255, 0.3)";
     const term = new Terminal({
       convertEol: true,
       disableStdin: false,
@@ -248,7 +205,8 @@ export function useTerminal() {
       cursorBlink: true,
       fontSize: 14,
       theme: {
-        background
+        background,
+        selectionBackground
       },
       allowProposedApi: true,
       allowTransparency: true
@@ -277,6 +235,15 @@ export function useTerminal() {
     }
 
     term.open(element);
+    if (isTouchCapable) {
+      removeTouchHandlers = attachTerminalTouchControls({
+        element,
+        terminal: term,
+        canPaste: () =>
+          state.value?.config.terminalOption?.pty === true &&
+          state.value?.status !== INSTANCE_STATUS_CODE.STOPPED
+      });
+    }
 
     // If text is selected, copy it. Otherwise, fallback to default behavior.
     term.attachCustomKeyEventHandler((arg) => {
@@ -369,11 +336,10 @@ export function useTerminal() {
   };
 
   events.on("stdout", (v: StdoutData) => {
-    if (state.value?.config?.terminalOption?.haveColor) {
-      terminal.value?.write(encodeConsoleColor(v.text));
-    } else {
-      terminal.value?.write(v.text);
-    }
+    const output = state.value?.config?.terminalOption?.haveColor
+      ? encodeConsoleColor(v.text)
+      : v.text;
+    terminal.value?.write(output);
   });
 
   const sendCommand = (command: string) => {
@@ -396,6 +362,10 @@ export function useTerminal() {
   onUnmounted(() => {
     clearInterval(fitAddonTask);
     clearInterval(statusQueryTask);
+    removeTouchHandlers?.();
+    removeTouchHandlers = undefined;
+    terminal.value?.dispose();
+    terminal.value = undefined;
     events.removeAllListeners();
     isManualDisconnect = true;
     socket?.disconnect();

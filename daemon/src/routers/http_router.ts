@@ -10,9 +10,20 @@ import FileManager from "../service/system_file";
 import InstanceSubsystem from "../service/system_instance";
 import uploadManager from "../service/upload_manager";
 import { clearUploadFiles } from "../tools/filepath";
+import {
+  resolveInstanceFileOwnership,
+  syncInstancePathOwnership
+} from "../tools/file_ownership";
 import { sendFile } from "../utils/speed_limit";
 
 const router = new Router();
+
+// Query params arrive as strings. Only an explicit "true"/"1" (or real boolean
+// true) means enabled; "0"/"false"/missing stay disabled. Using Boolean() here
+// would wrongly treat the string "0"/"false" as enabled.
+function queryBoolean(value: unknown): boolean {
+  return value === true || value === "true" || value === "1";
+}
 
 // Define the HTTP home page display route
 router.all("/", async (ctx) => {
@@ -43,30 +54,34 @@ router.get("/download/:key/:fileName", async (ctx) => {
 
     const fileAbsPath = fileManager.toAbsolutePath(fileRelativePath);
     await sendFile(ctx, fileAbsPath);
+    // Consume the passport only after a SUCCESSFUL send: failed attempts
+    // (bad name, missing file, aborted validation) must stay retryable with
+    // the same link instead of burning the single-use capability.
+    missionPassport.deleteMission(key, "download");
   } catch (error: any) {
     if (!ctx.res.headersSent) {
       ctx.body = $t("TXT_CODE_http_router.downloadErr", { error: error.message });
       ctx.status = 500;
     }
-  } finally {
-    missionPassport.deleteMission(key);
   }
 });
 
 // Old version upload route
 router.post("/upload/:key", async (ctx) => {
   const key = String(ctx.params.key);
-  const unzip = Boolean(ctx.query.unzip);
+  const unzip = queryBoolean(ctx.query.unzip);
   const zipCode = String(ctx.query.code);
   let tmpFiles: formidable.File | formidable.File[] | undefined;
   try {
+    // Capture the formidable temp files FIRST so the cleanup below always
+    // sees them - even when the passport/instance checks fail right after.
+    tmpFiles = ctx.request.files?.file;
     const mission = missionPassport.getMission(key, "upload");
     if (!mission) throw new Error("Access denied: No task found");
     const instance = InstanceSubsystem.getInstance(mission.parameter.instanceUuid);
     if (!instance) throw new Error("Access denied: No instance found");
     const uploadDir = mission.parameter.uploadDir;
     const cwd = instance.absoluteCwdPath();
-    const tmpFiles = ctx.request.files?.file;
     if (tmpFiles) {
       let uploadedFile: formidable.File;
       if (tmpFiles instanceof Array) {
@@ -112,11 +127,16 @@ router.post("/upload/:key", async (ctx) => {
       await fs.move(uploadedFile.filepath, fileSaveAbsolutePath, {
         overwrite: true
       });
+      const ownership = await resolveInstanceFileOwnership(instance);
+      if (ownership) await syncInstancePathOwnership(instance, fileSaveAbsolutePath, ownership);
 
       if (unzip) {
         const instanceFiles = new FileManager(instance.absoluteCwdPath());
-        instanceFiles.unzip(fileSaveAbsolutePath, ".", zipCode);
+        await instanceFiles.unzip(fileSaveAbsolutePath, ".", zipCode, ownership);
       }
+      // Success: retire the passport (its mission type only). Failed attempts
+      // keep it so the same link can be retried.
+      missionPassport.deleteMission(key, "upload");
       ctx.body = "OK";
       return;
     }
@@ -126,18 +146,17 @@ router.post("/upload/:key", async (ctx) => {
     ctx.body = error.message;
     ctx.status = 500;
   } finally {
-    missionPassport.deleteMission(key);
     if (tmpFiles) clearUploadFiles(tmpFiles);
   }
 });
 
 router.post("/upload-new/:key", async (ctx) => {
   const key = String(ctx.params.key);
-  const unzip = Boolean(ctx.query.unzip);
+  const unzip = queryBoolean(ctx.query.unzip);
   const zipCode = String(ctx.query.code);
   const filename = String(ctx.query.filename);
   const size = Number(ctx.query.size);
-  const deleteAfterUnzip = Boolean(ctx.query.deleteAfterUnzip);
+  const deleteAfterUnzip = queryBoolean(ctx.query.deleteAfterUnzip);
   if (ctx.query.stop) {
     const writer = uploadManager.get(key);
     if (writer) {
@@ -183,6 +202,9 @@ router.post("/upload-new/:key", async (ctx) => {
       await fileWriter.completeIfCovered();
     }
 
+    // Success: retire the passport (its mission type only). Failed inits keep
+    // it so the same link can be retried.
+    missionPassport.deleteMission(key, "upload");
     ctx.body = {
       data: {
         id: fr.id,
@@ -194,8 +216,6 @@ router.post("/upload-new/:key", async (ctx) => {
   } catch (error: any) {
     ctx.body = error.message;
     ctx.status = 500;
-  } finally {
-    missionPassport.deleteMission(key);
   }
 });
 
@@ -224,13 +244,13 @@ router.post("/upload-piece/:id", async (ctx) => {
     const chunk = await fs.readFile(uploadedFile.filepath);
     await writer.write(offset, chunk);
 
-    if (tmpFiles) clearUploadFiles(tmpFiles);
-
     ctx.body = "OK";
     return;
   } catch (error: any) {
     ctx.body = error.message;
     ctx.status = 500;
+  } finally {
+    if (tmpFiles) clearUploadFiles(tmpFiles);
   }
 });
 

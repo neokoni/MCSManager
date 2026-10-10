@@ -7,9 +7,15 @@ import { useAppRouters } from "@/hooks/useAppRouters";
 import { useLayoutCardTools } from "@/hooks/useCardTools";
 import { useOverviewInfo, type ComputedNodeInfo } from "@/hooks/useOverviewInfo";
 import { SocketStatus, useSocketIoClient } from "@/hooks/useSocketIo";
-import { t } from "@/lang/i18n";
-import { connectNode } from "@/services/apis";
+import { getCurrentLang, t } from "@/lang/i18n";
+import {
+  connectNode,
+  getDaemonUpgradeInfo,
+  upgradeDaemon,
+  type IUpgradeInfo
+} from "@/services/apis";
 import { arrayFilter } from "@/tools/array";
+import { pickLocalizedNotes } from "@/tools/localizedNotes";
 import { reportErrorMsg } from "@/tools/validator";
 import { hasVersionUpdate } from "@/tools/version";
 import type { LayoutCard } from "@/types";
@@ -17,6 +23,7 @@ import {
   BlockOutlined,
   CheckCircleOutlined,
   CloudServerOutlined,
+  CloudUploadOutlined,
   CodeOutlined,
   FolderOpenOutlined,
   InfoCircleOutlined,
@@ -24,8 +31,8 @@ import {
   ReloadOutlined,
   SettingOutlined
 } from "@ant-design/icons-vue";
-import { message } from "ant-design-vue";
-import { computed, onMounted, ref } from "vue";
+import { message, Modal } from "ant-design-vue";
+import { computed, defineProps, onMounted, ref, watch, type FunctionalComponent } from "vue";
 import NodeDetailDialog from "./NodeDetailDialog.vue";
 
 const { testFrontendSocket, socketStatus } = useSocketIoClient();
@@ -71,7 +78,70 @@ const tryConnectNode = async (uuid: string, showMsg = true) => {
   }
 };
 
+// Self-update the daemon: download the latest package and overlay it. The new
+// build only takes effect after a manual daemon restart (no auto-restart).
+const triggerDaemonUpdate = (uuid: string) => {
+  Modal.confirm({
+    title: t("TXT_CODE_AUTOUPDATE_DAEMON_BTN"),
+    content: t("TXT_CODE_AUTOUPDATE_DAEMON_CONFIRM"),
+    okText: t("TXT_CODE_AUTOUPDATE_BTN_OK"),
+    cancelText: t("TXT_CODE_AUTOUPDATE_BTN_CANCEL"),
+    onOk: async () => {
+      try {
+        const { execute } = upgradeDaemon();
+        const res = await execute({ params: { uuid } });
+        if (res.value?.started) {
+          // Update files are applied on disk; ask the operator to restart the
+          // daemon manually for the new version to take effect.
+          Modal.success({
+            content: t("TXT_CODE_AUTOUPDATE_DAEMON_STARTED", { v: res.value?.onlineVersion })
+          });
+        } else {
+          message.info(res.value?.message || t("TXT_CODE_AUTOUPDATE_ALREADY_LATEST"));
+        }
+      } catch (error: any) {
+        reportErrorMsg(error?.message ? error.message : t("TXT_CODE_AUTOUPDATE_DAEMON_FAILED"));
+      }
+    }
+  });
+};
+
 const { toPage } = useAppRouters();
+
+// Upgrade availability of this daemon according to the update manifest
+// (updateSourceUrl). Drives the yellow "Update Daemon" button + its tooltip.
+const daemonUpgradeInfo = ref<IUpgradeInfo>();
+
+const daemonUpdateAvailable = computed(() =>
+  Boolean(remoteNode.value?.available && daemonUpgradeInfo.value?.updateAvailable)
+);
+
+// Release notes of the online version, matched against the current panel
+// language (falls back to English when that locale is missing).
+const daemonUpdateNotes = computed(() =>
+  pickLocalizedNotes(daemonUpgradeInfo.value?.onlineNotes, getCurrentLang())
+);
+
+// Tooltip shown on the top-right "Update Daemon" button when a newer version is
+// available: the online version number followed by its release notes.
+const daemonUpdateTip = computed(() => {
+  if (!daemonUpdateAvailable.value) return undefined;
+  const tip = t("TXT_CODE_AUTOUPDATE_DAEMON_UPDATE_TIP", {
+    v: daemonUpgradeInfo.value?.onlineVersion ?? ""
+  });
+  return daemonUpdateNotes.value ? `${tip}\n${daemonUpdateNotes.value}` : tip;
+});
+
+const refreshDaemonUpgradeInfo = async () => {
+  const uuid = remoteNode.value?.uuid;
+  if (!uuid || !remoteNode.value?.available) return;
+  try {
+    const { execute } = getDaemonUpgradeInfo();
+    daemonUpgradeInfo.value = (await execute({ params: { uuid } })).value;
+  } catch (error: any) {
+    // silent: keep last known state
+  }
+};
 
 const detailList = (node: ComputedNodeInfo) => [
   {
@@ -119,8 +189,18 @@ const detailList = (node: ComputedNodeInfo) => [
   }
 ];
 
+interface NodeOperation {
+  title: string;
+  icon: FunctionalComponent;
+  // eslint-disable-next-line no-unused-vars -- type param name
+  click: (node: ComputedNodeInfo) => void;
+  condition?: () => boolean;
+  warning?: boolean;
+  tooltip?: string;
+}
+
 const nodeOperations = computed(() =>
-  arrayFilter([
+  arrayFilter<NodeOperation>([
     {
       title: t("TXT_CODE_ae533703"),
       icon: FolderOpenOutlined,
@@ -168,6 +248,18 @@ const nodeOperations = computed(() =>
       condition: () => remoteNode.value!.available
     },
     {
+      title: t("TXT_CODE_AUTOUPDATE_DAEMON_BTN"),
+      icon: CloudUploadOutlined,
+      click: (item: ComputedNodeInfo) => {
+        triggerDaemonUpdate(item.uuid);
+      },
+      condition: () => remoteNode.value!.available,
+      // Yellow icon + version/notes tooltip when the manifest advertises a
+      // newer daemon version.
+      warning: daemonUpdateAvailable.value,
+      tooltip: daemonUpdateTip.value
+    },
+    {
       title: t("TXT_CODE_f8b28901"),
       icon: ReloadOutlined,
       click: async (node: ComputedNodeInfo) => {
@@ -187,7 +279,16 @@ const nodeOperations = computed(() =>
 
 onMounted(() => {
   testFrontendSocket(remoteNode.value);
+  refreshDaemonUpgradeInfo();
 });
+
+// Overview data is polled every few seconds: once the daemon restarts on a new
+// version (after a self-update) the version below changes, so refresh the
+// upgrade info then and the update icon disappears.
+watch(
+  () => [remoteNode.value?.version, remoteNode.value?.available] as const,
+  () => refreshDaemonUpgradeInfo()
+);
 </script>
 
 <template>
@@ -211,6 +312,8 @@ onMounted(() => {
           <IconBtn
             :icon="operation.icon"
             :title="operation.title"
+            :warning="operation.warning"
+            :tooltip="operation.tooltip"
             @click="remoteNode && operation.click(remoteNode)"
           ></IconBtn>
         </span>

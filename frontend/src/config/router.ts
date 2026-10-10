@@ -306,19 +306,6 @@ const originRouterConfig: RouterConfig[] = [
       permission: ROLE.GUEST,
       mainMenu: false
     }
-  },
-  {
-    path: "/shop",
-    name: t("TXT_CODE_5a408a5e"),
-    component: LayoutContainer,
-    meta: {
-      permission: ROLE.GUEST,
-      mainMenu: true,
-      condition: () => {
-        const { state: appConfig } = useAppStateStore();
-        return appConfig.settings.businessMode;
-      }
-    }
   }
 ];
 
@@ -398,7 +385,7 @@ router.beforeEach(async (to, from, next) => {
   if (
     toRoutePath.includes("_open_page") ||
     toRoutePath.startsWith("/sso/") ||
-    ["/shop", "/login", "/install", "/404"].includes(toRoutePath)
+    ["/login", "/install", "/404"].includes(toRoutePath)
   ) {
     return next();
   }

@@ -22,7 +22,7 @@ router.use(async (ctx, next) => {
   const userUuid = getUserUuid(ctx);
   if (systemConfig?.canFileManager === false && getUserPermission(ctx) < 10) {
     ctx.status = 403;
-    ctx.body = new Error($t("TXT_CODE_router.file.off"));
+    ctx.body = $t("TXT_CODE_router.file.off");
     return;
   }
   if (isHaveInstanceByUuid(userUuid, daemonId, instanceUuid)) {
@@ -48,7 +48,15 @@ router.get(
       const result = await new RemoteRequest(remoteService).request("file/status", {
         instanceUuid
       });
-      if (!isTopPermissionByUuid(getUserUuid(ctx))) delete result.disk;
+      // Host disk enumeration (daemon `file/status` returns `disks`, e.g. the
+      // Windows volume letters) is admin-only information. The old code did
+      // `delete result.disk` (typo) and leaked `disks` to every user. Redact to
+      // an EMPTY ARRAY (not delete) so the frontend `disks: string[]` contract
+      // stays valid and `disks.length` never throws.
+      if (!isTopPermissionByUuid(getUserUuid(ctx))) {
+        delete result.disk;
+        result.disks = [];
+      }
       ctx.body = result;
     } catch (err) {
       ctx.body = err;

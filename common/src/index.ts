@@ -25,6 +25,14 @@ export {
 
 export { arrayUnique } from "./array";
 
+export {
+  applyUpgradePackage,
+  compareVersions,
+  downloadToFile,
+  extractZip,
+  fetchJson
+} from "./upgrade";
+
 export { removeTrail } from "./string_utils";
 
 export {

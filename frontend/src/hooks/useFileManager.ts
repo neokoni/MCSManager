@@ -295,7 +295,7 @@ export const useFileManager = (instanceId: string = "", daemonId: string = "") =
     });
   };
 
-  const getFileList = async (throwErr = false, initPath?: string) => {
+  const getFileList = async (throwErr = false, initPath?: string, forceRequest = false) => {
     const { execute } = getFileListApi();
     const thisTab = currentTabs.value.find((e) => e.key === activeTab.value);
 
@@ -309,6 +309,7 @@ export const useFileManager = (instanceId: string = "", daemonId: string = "") =
         path = currentPath.value;
       }
       const res = await execute({
+        forceRequest,
         params: {
           daemonId: daemonId || "",
           uuid: instanceId || "",
@@ -560,27 +561,36 @@ export const useFileManager = (instanceId: string = "", daemonId: string = "") =
 
   const refreshUploadTarget = async (path: string) => {
     if (!isViewingTargetPath(path)) return;
-    await getFileList();
+    await getFileList(false, undefined, true);
   };
 
   const waitForInstanceFileTasks = async (baselineTaskCount: number, timeout = 15000) => {
     const startTime = Date.now();
-    await sleep(500);
+    let taskStarted = false;
+    const taskStartGracePeriod = 2000;
 
     while (Date.now() - startTime < timeout) {
-      await getFileStatus();
+      await getFileStatus(true);
       const taskCount = fileStatus.value?.instanceFileTask ?? 0;
-      if (taskCount <= baselineTaskCount) return;
+      if (taskCount > baselineTaskCount) {
+        taskStarted = true;
+      } else if (taskStarted) {
+        return;
+      } else if (Date.now() - startTime >= taskStartGracePeriod) {
+        return;
+      }
       await sleep(500);
     }
   };
 
   const createUploadCompletionTracker = (handler: () => void | Promise<void>) => {
     let pendingCount = 0;
+    let boundCount = 0;
+    let closed = false;
     let finished = false;
 
     const handleCompletion = () => {
-      if (finished) return;
+      if (!closed || pendingCount > 0 || boundCount === 0 || finished) return;
       finished = true;
       void Promise.resolve(handler()).catch((error) => {
         console.error("Failed to handle upload completion:", error);
@@ -590,14 +600,19 @@ export const useFileManager = (instanceId: string = "", daemonId: string = "") =
     return {
       bind(task: ReturnType<typeof uploadService.append>) {
         pendingCount += 1;
+        boundCount += 1;
         task.instanceInfo = {
           instanceId: instanceId || "",
           daemonId: daemonId || ""
         };
         task.addCallback("end", () => {
           pendingCount -= 1;
-          if (pendingCount === 0) handleCompletion();
+          handleCompletion();
         });
+      },
+      close() {
+        closed = true;
+        handleCompletion();
       }
     };
   };
@@ -705,6 +720,7 @@ export const useFileManager = (instanceId: string = "", daemonId: string = "") =
     const targetPath = overridePath || currentPath.value;
     const uploadQueue: SelectedUploadFile[] = files.map((file) => ({ file, overwrite: false }));
     const completionTracker = createUploadCompletionTracker(async () => {
+      await sleep(300);
       await refreshUploadTarget(targetPath);
       if (onComplete) await onComplete();
     });
@@ -768,11 +784,14 @@ export const useFileManager = (instanceId: string = "", daemonId: string = "") =
           );
         } catch (err: any) {
           console.error(err);
+          completionTracker.close();
           return reportErrorMsg(err.response?.data || err.message);
         }
       }
+      completionTracker.close();
     } catch (err: any) {
       console.error(err);
+      completionTracker.close();
       return reportErrorMsg(err.response?.data || err.message);
     }
   };
@@ -794,7 +813,7 @@ export const useFileManager = (instanceId: string = "", daemonId: string = "") =
 
     const startUpload = async () => {
       const targetPath = currentPath.value;
-      await getFileStatus();
+      await getFileStatus(true);
       const baselineTaskCount = fileStatus.value?.instanceFileTask ?? 0;
       const zipKey = `zip_${folderName}`;
 
@@ -867,6 +886,7 @@ export const useFileManager = (instanceId: string = "", daemonId: string = "") =
             completionTracker.bind(task);
           }
         );
+        completionTracker.close();
 
         message.loading({ content: t("TXT_CODE_b82225c3"), key: zipKey });
       } catch (error: any) {
@@ -1078,10 +1098,11 @@ export const useFileManager = (instanceId: string = "", daemonId: string = "") =
     getFileList();
   };
 
-  const getFileStatus = async () => {
+  const getFileStatus = async (forceRequest = false) => {
     const { state, execute } = getFileStatusApi();
     try {
       await execute({
+        forceRequest,
         params: {
           daemonId: daemonId || "",
           uuid: instanceId || ""
