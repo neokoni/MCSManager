@@ -17,9 +17,12 @@ const SUITES = [
   "instance",
   "files",
   "streams",
+  "dataplane",
+  "proxy_advanced",
   "security_user",
   "security_instance",
   "security_files",
+  "security_sso_redirect",
   "security_auth",
   "docker"
 ];

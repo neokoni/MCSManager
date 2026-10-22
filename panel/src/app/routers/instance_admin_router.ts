@@ -3,6 +3,7 @@ import axios from "axios";
 import fs from "fs-extra";
 import path from "path";
 import { MARKET_CACHE_FILE_PATH, SAVE_DIR_PATH } from "../const";
+import { DataPlaneMode } from "../entity/setting";
 import { ROLE } from "../entity/user";
 import { $t } from "../i18n";
 import permission from "../middleware/permission";
@@ -18,6 +19,8 @@ import RemoteRequest, { INSTANCE_KILL_TIMEOUT } from "../service/remote_command"
 import RemoteServiceSubsystem from "../service/remote_service";
 import userSystem from "../service/user_service";
 import { systemConfig } from "../setting";
+import GatewayToken from "../service/gateway_token";
+import { browserFacingAddr } from "../service/proxy_addr";
 
 const router = new Router({ prefix: "/instance" });
 
@@ -92,6 +95,22 @@ router.post(
         ...getOperationLoggerOperator(ctx),
         instance_name: result.nickname
       });
+      if (systemConfig?.dataPlane === DataPlaneMode.Proxy) {
+        const token = GatewayToken.issueProxyToken({
+          daemonId,
+          instanceUuid: newInstanceUuid,
+          op: "upload",
+          target: ".",
+          ttlSec: 120
+        });
+        ctx.body = {
+          instanceUuid: newInstanceUuid,
+          password: token,
+          addr: browserFacingAddr(ctx),
+          remoteMappings: []
+        };
+        return;
+      }
       // Send a cross-end file upload task to the daemon
       const addr = remoteService.config.fullAddr;
       const remoteMappings = remoteService.config.getConvertedRemoteMappings();
