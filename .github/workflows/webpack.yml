@@ -12,7 +12,7 @@ jobs:
 
     strategy:
       matrix:
-        node-version: [16.x, 20.x]
+        node-version: [24, 26]
 
     steps:
       - uses: actions/checkout@v3
@@ -21,11 +21,11 @@ jobs:
         uses: actions/setup-node@v3
         with:
           node-version: ${{ matrix.node-version }}
+          check-latest: true
 
       - name: Run Build Script
-        run: | 
+        run: |
           chmod a+x ./install-dependents.sh
           chmod a+x ./build.sh
           ./install-dependents.sh
           ./build.sh
-        

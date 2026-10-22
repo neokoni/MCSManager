@@ -1,7 +1,7 @@
 ARG EMBEDDED_JAVA_VERSION=21
 ARG BUILDPLATFORM=linux/amd64
 
-FROM --platform=${BUILDPLATFORM} node:lts-alpine AS builder
+FROM --platform=${BUILDPLATFORM} node:26-alpine AS builder
 
 WORKDIR /src
 COPY . /src
